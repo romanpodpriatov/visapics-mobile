@@ -23,14 +23,14 @@ jobs:
     if: inputs.platform == 'android' || inputs.platform == 'both'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -47,7 +47,7 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: visapics-android-apk
           path: android/app/build/outputs/apk/release/*.apk
@@ -55,14 +55,25 @@ jobs:
 
   ios:
     if: inputs.platform == 'ios' || inputs.platform == 'both'
-    runs-on: macos-15
+    # macos-26, not macos-15. React Native 0.86 pulls Swift packages built with
+    # tools version 6.2, and the Xcode 16.4 that macos-15 defaults to ships
+    # Swift 6.1 — package resolution fails before a single file compiles, with
+    # a message that looks nothing like a toolchain problem.
+    runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
+
+      # Recorded in the log on purpose: when this breaks again, the first
+      # question is which toolchain built it.
+      - name: Report the toolchain
+        run: |
+          xcodebuild -version
+          swift --version
 
       - run: npm ci
 
@@ -96,7 +107,7 @@ jobs:
           cp -r build/Build/Products/Release-iphoneos/VisaPics.app Payload/
           zip -qr VisaPics-unsigned.ipa Payload
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: visapics-ios-unsigned-ipa
           path: ios/VisaPics-unsigned.ipa
