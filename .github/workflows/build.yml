@@ -1,0 +1,103 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'What to build. macOS minutes bill at 10x, and are free on public repositories.'
+        type: choice
+        default: android
+        options: [android, ios, both]
+
+# A newer dispatch supersedes an older one: without this a run started while
+# another is in flight pays for both and only the later result is ever used.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: npm ci
+
+      - name: Generate the native project
+        run: npx expo prebuild --platform android --clean
+
+      # The release build type is signed with the debug keystore that prebuild
+      # generates, so this needs no secrets. A Play Store release needs a real
+      # keystore and gets its own workflow.
+      - name: Assemble
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visapics-android-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  ios:
+    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # On macOS this also runs pod install, which is what produces
+      # VisaPics.xcworkspace. A Linux prebuild skips CocoaPods and leaves only
+      # the .xcodeproj behind.
+      - name: Generate the native project
+        run: npx expo prebuild --platform ios --clean
+
+      # Unsigned on purpose: this proves the native build compiles without
+      # putting a signing certificate into a public repository. Signed builds
+      # for TestFlight go through Xcode locally until the release workflow
+      # exists.
+      - name: Build unsigned archive
+        working-directory: ios
+        run: |
+          xcodebuild -workspace VisaPics.xcworkspace \
+            -scheme VisaPics \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package IPA
+        working-directory: ios
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/VisaPics.app Payload/
+          zip -qr VisaPics-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visapics-ios-unsigned-ipa
+          path: ios/VisaPics-unsigned.ipa
+          if-no-files-found: error

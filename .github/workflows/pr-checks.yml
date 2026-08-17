@@ -1,0 +1,30 @@
+name: PR checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push supersedes an older one on the same ref.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test -- --passWithNoTests

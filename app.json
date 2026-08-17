@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "VisaPics",
+    "slug": "visapics",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "visapics",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "org.visapics.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "VisaPics uses the camera to check head size, centring, lighting and background against the document rules while you line up your photo.",
+        "NSPhotoLibraryUsageDescription": "VisaPics reads the photo you choose so it can measure it against the document rules.",
+        "NSPhotoLibraryAddUsageDescription": "VisaPics saves your finished passport photo to your library.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "org.visapics.app",
+      "versionCode": 1,
+      "permissions": ["android.permission.CAMERA"],
+      "adaptiveIcon": {
+        "backgroundColor": "#EDEAE3",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ]
+  }
+}
