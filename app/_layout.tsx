@@ -1,14 +1,32 @@
+/**
+ * Root providers.
+ *
+ * The splash is held until the type and the stored state are ready, and no
+ * longer: registering the guest session is started here but deliberately not
+ * awaited. Onboarding and the catalogue both work unauthenticated, and a
+ * launch that waits on a network call is a launch that hangs on a bad
+ * connection — which is a Guideline 2.1 rejection.
+ */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { retryPolicy } from '../src/api/hooks';
+import { useAuthStore } from '../src/store/auth';
+import { useDraftStore } from '../src/store/draft';
+import { useOnboardingStore } from '../src/store/onboarding';
 import { theme } from '../src/theme';
 
 // Hold the splash until the type is ready. Without this the first frame draws
 // in the system font and then reflows, which reads as a broken launch.
 void SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: retryPolicy } },
+});
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -22,16 +40,35 @@ export default function RootLayout() {
     'JetBrainsMono-Medium': require('../assets/fonts/JetBrainsMono-Medium.ttf'),
   });
 
-  useEffect(() => {
-    // Proceed on error as well as on success: a font that failed to load is a
-    // cosmetic problem, and a splash screen that never lifts is not.
-    if (fontsLoaded || fontError) void SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
+  const authHydrated = useAuthStore((s) => s.hydrated);
+  const draftHydrated = useDraftStore((s) => s.hydrated);
+  const onboardingHydrated = useOnboardingStore((s) => s.hydrated);
 
-  if (!fontsLoaded && !fontError) return null;
+  useEffect(() => {
+    void useAuthStore.getState().hydrate();
+    void useDraftStore.getState().hydrate();
+    void useOnboardingStore.getState().hydrate();
+  }, []);
+
+  useEffect(() => {
+    if (!authHydrated) return;
+    // Not awaited, and failure is not fatal: without a session the catalogue
+    // still reads, and the first call that needs one will say so.
+    void useAuthStore.getState().ensureSession().catch(() => undefined);
+  }, [authHydrated]);
+
+  const ready = (fontsLoaded || fontError) && authHydrated && draftHydrated && onboardingHydrated;
+
+  useEffect(() => {
+    // Proceed on a font error as well as on success: a font that failed to
+    // load is a cosmetic problem, and a splash that never lifts is not.
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -39,6 +76,6 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: theme.color.surface },
         }}
       />
-    </>
+    </QueryClientProvider>
   );
 }

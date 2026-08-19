@@ -8,6 +8,7 @@
  * so `screen` reports that render was never called.
  */
 import { fireEvent, render } from '@testing-library/react-native';
+import { View } from 'react-native';
 
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
@@ -20,6 +21,17 @@ describe('Button', () => {
     const { getByText } = render(<Button label="Unlock & download" onPress={onPress} />);
     fireEvent.press(getByText('Unlock & download'));
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('can carry an icon after the label as well as before it', () => {
+    const { getByTestId } = render(
+      <Button
+        label="How it works"
+        onPress={jest.fn()}
+        trailingIcon={<View testID="arrow" />}
+      />,
+    );
+    expect(getByTestId('arrow')).toBeTruthy();
   });
 
   it('does not fire while disabled', () => {

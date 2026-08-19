@@ -18,6 +18,8 @@ type Props = {
   onPress: () => void;
   variant?: Variant;
   icon?: ReactNode;
+  /** Rendered after the label — a "next" arrow, rather than a leading glyph. */
+  trailingIcon?: ReactNode;
   disabled?: boolean;
   busy?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -37,6 +39,7 @@ export function Button({
   onPress,
   variant = 'primary',
   icon,
+  trailingIcon,
   disabled = false,
   busy = false,
   style,
@@ -66,6 +69,7 @@ export function Button({
         <View style={styles.content}>
           {icon}
           <Text style={[styles.label, labelStyles[variant]]}>{label}</Text>
+          {trailingIcon}
         </View>
       )}
     </Pressable>

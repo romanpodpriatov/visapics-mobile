@@ -7,7 +7,8 @@
  */
 import { queryOptions, useQuery } from '@tanstack/react-query';
 
-import { api } from './client';
+import { useAuthStore } from '../store/auth';
+import { ApiError, api } from './client';
 import type { Config, Country, CreditsSummary, Specification, SpecificationSummary } from './types';
 
 /**
@@ -56,9 +57,31 @@ export const creditsQuery = () =>
     staleTime: 0,
   });
 
+/**
+ * What is worth trying again.
+ *
+ * Anything under 500 is an answer the server meant — no credits, not yours,
+ * already gone — and repeating it only delays the screen that has to say so.
+ * A 5xx or a dropped connection is worth two more attempts.
+ */
+export const retryPolicy = (failureCount: number, error: unknown): boolean => {
+  if (error instanceof ApiError && error.status < 500) return false;
+  return failureCount < 2;
+};
+
 export const useConfig = () => useQuery(configQuery());
 export const useCountries = () => useQuery(countriesQuery());
-export const useSpecifications = (countryCode: string) => useQuery(specificationsQuery(countryCode));
+/** The documents of one country, once a country has been chosen. */
+export const useSpecifications = (countryCode: string) =>
+  useQuery({ ...specificationsQuery(countryCode), enabled: countryCode.length > 0 });
 export const useSpecification = (countryCode: string, documentType: string) =>
   useQuery(specificationQuery(countryCode, documentType));
-export const useCredits = () => useQuery(creditsQuery());
+/**
+ * The balance, once there is a session to ask with. Before then the call is a
+ * guaranteed 401, and several of those at launch is how a refresh token gets
+ * burned for nothing.
+ */
+export const useCredits = () => {
+  const hasSession = useAuthStore((s) => s.accessToken !== null);
+  return useQuery({ ...creditsQuery(), enabled: hasSession });
+};
