@@ -1,14 +1,17 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 
 import Permission from '../app/permission';
+import { pickFromLibrary } from '../src/photo/library';
+import { validatePhoto } from '../src/photo/validate';
 import { useConsentStore } from '../src/store/consent';
 import { configFixture, renderScreen } from '../src/test-utils';
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: mockBack }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: mockBack }),
 }));
 
 const mockRequestPermission = jest.fn(async () => true);
@@ -22,6 +25,16 @@ jest.mock('react-native-vision-camera', () => ({
   useCameraPermission: () => mockCameraPermission,
 }));
 
+jest.mock('../src/photo/library', () => ({
+  pickFromLibrary: jest.fn(),
+  sampleAsset: jest.fn(),
+}));
+
+jest.mock('../src/photo/validate', () => ({
+  validatePhoto: jest.fn(),
+  prepareForUpload: jest.fn(),
+}));
+
 const seeds: [string[], unknown][] = [[['config'], configFixture]];
 
 const setPermission = (over: Partial<typeof mockCameraPermission>) =>
@@ -33,6 +46,9 @@ describe('camera permission', () => {
   beforeEach(() => {
     mockBack.mockClear();
     mockReplace.mockClear();
+    mockPush.mockClear();
+    jest.mocked(pickFromLibrary).mockReset();
+    jest.mocked(validatePhoto).mockReset();
     mockRequestPermission.mockClear();
     openSettings.mockClear();
     setPermission({
@@ -119,5 +135,25 @@ describe('camera permission', () => {
     renderScreen(<Permission />, seeds);
 
     expect(screen.queryByText('Allow camera access')).toBeNull();
+  });
+
+  it('really reaches the library when the camera is refused', async () => {
+    // The whole decline path rests on this button doing something.
+    useConsentStore.setState({ accepted: true });
+    setPermission({ hasPermission: false, status: 'denied', canRequestPermission: false });
+    jest.mocked(pickFromLibrary).mockResolvedValue({
+      status: 'picked',
+      asset: { uri: 'file:///holiday.jpg' },
+    });
+    jest.mocked(validatePhoto).mockResolvedValue({ ok: true, uri: 'file:///holiday.jpg' });
+
+    renderScreen(<Permission />, seeds);
+    fireEvent.press(screen.getByText('Use library'));
+
+    await waitFor(() => expect(pickFromLibrary).toHaveBeenCalled());
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/processing',
+      params: { photo: 'file:///holiday.jpg' },
+    });
   });
 });

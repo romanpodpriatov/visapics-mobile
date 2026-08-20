@@ -1,6 +1,7 @@
 import type { Specification } from '../api/types';
 import {
   buildRules,
+  formatMegabytes,
   deletionLabel,
   hoursLeft,
   formatSpecDate,
@@ -215,5 +216,13 @@ describe('how long the server will keep the photo', () => {
     expect(deletionLabel(22)).toBe('22 h');
     expect(deletionLabel(166)).toBe('6 days');
     expect(deletionLabel(48)).toBe('2 days');
+  });
+});
+
+describe('formatMegabytes', () => {
+  it("reads the way the phone's own Photos app reads", () => {
+    // Decimal megabytes, because that is the number the person already saw.
+    expect(formatMegabytes(8_400_000)).toBe('8.4 MB');
+    expect(formatMegabytes(1_200_000)).toBe('1.2 MB');
   });
 });

@@ -2,6 +2,8 @@ export { Button } from './Button';
 export { Card } from './Card';
 export { ConsentSheet } from './ConsentSheet';
 export { Eyebrow } from './Eyebrow';
+export { LibrarySheet } from './LibrarySheet';
 export { Sheet } from './Sheet';
 export { Toast } from './Toast';
 export { Toggle } from './Toggle';
+export { UploadErrorSheet, type UploadProblemDetail } from './UploadErrorSheet';

@@ -1,12 +1,24 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import Photos from '../app/(tabs)/photos';
+import { pickFromLibrary, sampleAsset } from '../src/photo/library';
+import { prepareForUpload, validatePhoto } from '../src/photo/validate';
 import { useDraftStore } from '../src/store/draft';
 import { configFixture, renderScreen } from '../src/test-utils';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+}));
+
+jest.mock('../src/photo/library', () => ({
+  pickFromLibrary: jest.fn(),
+  sampleAsset: jest.fn(),
+}));
+
+jest.mock('../src/photo/validate', () => ({
+  validatePhoto: jest.fn(),
+  prepareForUpload: jest.fn(),
 }));
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -46,6 +58,10 @@ const chooseUkPassport = () =>
 describe('home', () => {
   beforeEach(() => {
     mockPush.mockClear();
+    jest.mocked(pickFromLibrary).mockReset();
+    jest.mocked(sampleAsset).mockReset();
+    jest.mocked(validatePhoto).mockReset();
+    jest.mocked(prepareForUpload).mockReset();
     useDraftStore.setState({
       countryCode: null,
       documentType: null,
@@ -139,5 +155,91 @@ describe('home', () => {
     renderScreen(<Photos />, seeds());
 
     expect(screen.queryByText(/Deletes in/)).toBeNull();
+  });
+
+  it('asks for a document before it asks for a photo', () => {
+    // Coaching cannot coach without a specification, and the server cannot
+    // process without one either.
+    renderScreen(<Photos />, seeds());
+
+    fireEvent.press(screen.getByText('Take photo with coaching'));
+
+    expect(mockPush).toHaveBeenCalledWith('/picker');
+  });
+
+  it('goes to the camera once a document is chosen', () => {
+    chooseUkPassport();
+    renderScreen(<Photos />, seeds());
+
+    fireEvent.press(screen.getByText('Take photo with coaching'));
+
+    expect(mockPush).toHaveBeenCalledWith('/permission');
+  });
+
+  it('sends a photo from the library on to be processed', async () => {
+    chooseUkPassport();
+    jest.mocked(pickFromLibrary).mockResolvedValue({
+      status: 'picked',
+      asset: { uri: 'file:///holiday.jpg' },
+    });
+    jest.mocked(validatePhoto).mockResolvedValue({ ok: true, uri: 'file:///holiday.jpg' });
+    renderScreen(<Photos />, seeds());
+
+    fireEvent.press(screen.getByText('Use a photo from library'));
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/processing',
+        params: { photo: 'file:///holiday.jpg' },
+      }),
+    );
+  });
+
+  it('offers to convert a photo the server would refuse', async () => {
+    chooseUkPassport();
+    jest.mocked(pickFromLibrary).mockResolvedValue({
+      status: 'picked',
+      asset: { uri: 'file:///huge.heic' },
+    });
+    jest.mocked(validatePhoto).mockResolvedValue({
+      ok: false,
+      kind: 'too_large',
+      bytes: 8_400_000,
+    });
+    renderScreen(<Photos />, seeds());
+
+    fireEvent.press(screen.getByText('Use a photo from library'));
+
+    expect(await screen.findByText('That file is 8.4 MB')).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/processing' }),
+    );
+  });
+
+  it('explains itself when the system will not share the library', async () => {
+    chooseUkPassport();
+    jest.mocked(pickFromLibrary).mockResolvedValue({ status: 'denied' });
+    renderScreen(<Photos />, seeds());
+
+    fireEvent.press(screen.getByText('Use a photo from library'));
+
+    expect(await screen.findByText('We cannot see your library')).toBeTruthy();
+  });
+
+  it('runs the bundled specimen through the same path', async () => {
+    // The control an App Review tester uses to see the whole product without
+    // photographing themselves; a demo branch would defeat the point.
+    chooseUkPassport();
+    jest.mocked(sampleAsset).mockResolvedValue({ uri: 'file:///specimen.jpg' });
+    jest.mocked(validatePhoto).mockResolvedValue({ ok: true, uri: 'file:///specimen.jpg' });
+    renderScreen(<Photos />, seeds());
+
+    fireEvent.press(screen.getByText('Try it with a sample photo'));
+
+    await waitFor(() => expect(validatePhoto).toHaveBeenCalled());
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/processing',
+      params: { photo: 'file:///specimen.jpg' },
+    });
   });
 });

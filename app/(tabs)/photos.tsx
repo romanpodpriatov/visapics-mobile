@@ -12,7 +12,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useConfig, useCredits, useSpecifications } from '../../src/api/hooks';
-import { Button, Card, Toggle } from '../../src/components';
+import {
+  Button,
+  Card,
+  LibrarySheet,
+  Toggle,
+  UploadErrorSheet,
+} from '../../src/components';
 import { CameraIcon, ChevronIcon, ImageIcon, InfoIcon } from '../../src/components/icons';
 import {
   creditLabel,
@@ -22,6 +28,7 @@ import {
   hoursLeft,
   verifiedLine,
 } from '../../src/format';
+import { usePhotoImport } from '../../src/photo/useImport';
 import { useDraftStore } from '../../src/store/draft';
 import { display, eyebrow, shadow, theme } from '../../src/theme';
 
@@ -58,6 +65,12 @@ export default function Photos() {
   const specLine = spec
     ? [formatDimensions(spec), spec.background_color?.replace(/_/g, ' ')].filter(Boolean).join(' · ')
     : 'Country and document type';
+
+  const importer = usePhotoImport();
+
+  // Nothing can be coached, processed or graded without a specification, so
+  // every route to a photo asks for one first rather than failing later.
+  const withDocument = (run: () => void) => () => (documentType ? run() : router.push('/picker'));
 
   const retentionHours = config?.retention_hours;
   const remaining =
@@ -128,22 +141,19 @@ export default function Photos() {
         <View style={styles.actions}>
           <Button
             label="Take photo with coaching"
-            onPress={() => router.push('/permission')}
+            onPress={withDocument(() => router.push('/permission'))}
             icon={<CameraIcon size={19} color="#FFFFFF" />}
           />
-          {/* Wired in Task 7, with the library and the bundled specimen. */}
           <Button
             label="Use a photo from library"
             variant="secondary"
-            disabled
-            onPress={() => undefined}
+            onPress={withDocument(() => void importer.fromLibrary())}
             icon={<ImageIcon size={17} color={theme.color.text} />}
           />
           <Button
             label="Try it with a sample photo"
             variant="ghost"
-            disabled
-            onPress={() => undefined}
+            onPress={withDocument(() => void importer.fromSample())}
           />
         </View>
       </Card>
@@ -222,6 +232,13 @@ export default function Photos() {
       ) : null}
 
       <View style={{ height: insets.bottom + theme.space.xl }} />
+
+      <UploadErrorSheet
+        problem={importer.problem}
+        onResolve={() => void importer.resolveProblem()}
+        onCancel={importer.dismissProblem}
+      />
+      <LibrarySheet visible={importer.noAccess} onClose={importer.dismissAccess} />
     </ScrollView>
   );
 }

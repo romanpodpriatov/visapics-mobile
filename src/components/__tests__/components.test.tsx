@@ -11,6 +11,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { View } from 'react-native';
 
 import { Button } from '../Button';
+import { UploadErrorSheet } from '../UploadErrorSheet';
 import { Sheet } from '../Sheet';
 import { Toggle } from '../Toggle';
 import { hitSlopTo44, theme } from '../../theme';
@@ -127,5 +128,41 @@ describe('hitSlopTo44', () => {
   it('leaves a large enough control alone', () => {
     expect(hitSlopTo44(52)).toBeUndefined();
     expect(hitSlopTo44(44)).toBeUndefined();
+  });
+});
+
+describe('UploadErrorSheet', () => {
+  const open = (props: Partial<Parameters<typeof UploadErrorSheet>[0]> = {}) =>
+    render(
+      <UploadErrorSheet
+        problem={{ kind: 'too_large', bytes: 8_400_000 }}
+        onResolve={jest.fn()}
+        onCancel={jest.fn()}
+        {...props}
+      />,
+    );
+
+  it('says how big the file actually is', () => {
+    const { getByText } = open();
+    expect(getByText('That file is 8.4 MB')).toBeTruthy();
+  });
+
+  it('offers to convert rather than refusing outright', () => {
+    const onResolve = jest.fn();
+    const { getByText } = open({ onResolve });
+    fireEvent.press(getByText('Convert & continue'));
+    expect(onResolve).toHaveBeenCalled();
+  });
+
+  it('explains a photo with no face in it', () => {
+    const { getByText } = open({ problem: { kind: 'no_face' } });
+    expect(getByText('No face detected')).toBeTruthy();
+    expect(getByText('Choose another photo')).toBeTruthy();
+  });
+
+  it('explains a photo with more than one person in it', () => {
+    const { getByText } = open({ problem: { kind: 'multi_face' } });
+    expect(getByText('More than one face')).toBeTruthy();
+    expect(getByText('Take photo instead')).toBeTruthy();
   });
 });

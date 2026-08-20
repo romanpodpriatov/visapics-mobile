@@ -201,6 +201,14 @@ export function buildRules(spec: Specification): Rule[] {
   return rules;
 }
 
+/**
+ * "8.4 MB". Decimal megabytes rather than binary, because that is the number
+ * the phone's own Photos app already showed them.
+ */
+export function formatMegabytes(bytes: number): string {
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+}
+
 /** What the pill by the wordmark says. */
 export function creditLabel(credits: number | undefined): string {
   if (!credits) return 'Guest';

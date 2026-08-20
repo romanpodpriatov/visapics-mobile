@@ -16,8 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCameraPermission } from 'react-native-vision-camera';
 
 import { useConfig } from '../src/api/hooks';
-import { Button, ConsentSheet } from '../src/components';
+import { Button, ConsentSheet, LibrarySheet, UploadErrorSheet } from '../src/components';
 import { CameraIcon } from '../src/components/icons';
+import { usePhotoImport } from '../src/photo/useImport';
 import { useConsentStore } from '../src/store/consent';
 import { display, eyebrow, theme } from '../src/theme';
 
@@ -30,6 +31,7 @@ export default function Permission() {
   const accept = useConsentStore((s) => s.accept);
 
   const { hasPermission, canRequestPermission, requestPermission } = useCameraPermission();
+  const importer = usePhotoImport();
 
   const refused = accepted && !hasPermission && !canRequestPermission;
 
@@ -72,9 +74,11 @@ export default function Permission() {
                   onPress={() => void Linking.openSettings()}
                   style={styles.refusedButton}
                 />
-                {/* Task 7 points this at the library import; until then it returns
-                    to the screen the library button lives on. */}
-                <Button label="Use library" onPress={() => router.back()} style={styles.refusedButton} />
+                <Button
+                  label="Use library"
+                  onPress={() => void importer.fromLibrary()}
+                  style={styles.refusedButton}
+                />
               </View>
             </View>
           ) : null}
@@ -86,6 +90,13 @@ export default function Permission() {
           {refused ? null : <Text style={styles.footnote}>The system will ask next</Text>}
         </>
       ) : null}
+
+      <UploadErrorSheet
+        problem={importer.problem}
+        onResolve={() => void importer.resolveProblem()}
+        onCancel={importer.dismissProblem}
+      />
+      <LibrarySheet visible={importer.noAccess} onClose={importer.dismissAccess} />
 
       <ConsentSheet
         visible={!accepted}
