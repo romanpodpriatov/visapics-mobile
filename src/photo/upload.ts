@@ -2,9 +2,10 @@
  * Sending a photo to be processed, and waiting for the answer.
  */
 import { useQuery } from '@tanstack/react-query';
+import { File } from 'expo-file-system';
 import { useRef } from 'react';
 
-import { api } from '../api/client';
+import { ApiError, api } from '../api/client';
 import { retryPolicy } from '../api/hooks';
 import type { CompletedTask, TaskAccepted, TaskStatus, UnlockResult } from '../api/types';
 
@@ -12,6 +13,49 @@ export const POLL_INTERVAL_MS = 1500;
 
 /** A poll loop with no ceiling drains the battery of anyone who walks away. */
 export const POLL_DEADLINE_MS = 3 * 60 * 1000;
+
+/**
+ * The photo is gone, or empty, by the time the upload is built.
+ *
+ * Worth its own type because React Native cannot say why a multipart body
+ * failed: if the file behind the uri is unreadable, `fetch` rejects with a
+ * bare network error and the screen would blame the server for something that
+ * never left the phone.
+ */
+export class PhotoUnreadableError extends Error {
+  constructor(readonly uri: string) {
+    super(`The photo could not be read (${uri})`);
+    this.name = 'PhotoUnreadableError';
+  }
+}
+
+/** Refuse a photo that is not there, while there is still something to say. */
+export function assertPhotoReadable(uri: string): void {
+  try {
+    const file = new File(uri);
+    if (file.exists && (file.size ?? 0) > 0) return;
+  } catch {
+    // An unusable uri throws rather than reporting itself missing.
+  }
+  throw new PhotoUnreadableError(uri);
+}
+
+/**
+ * What to put on screen when an upload fails.
+ *
+ * The old text — "Could not reach the server" — was a guess, and production
+ * showed it was the wrong one: the device had just registered and read its
+ * credits over the same connection, and the upload never left the phone. A
+ * failure nobody can name is a failure nobody can fix, so this one is named.
+ */
+export function uploadErrorMessage(error: unknown): string {
+  if (error instanceof PhotoUnreadableError) {
+    return 'That photo could not be opened. Choose it again.';
+  }
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error && error.message) return `Upload failed — ${error.message}`;
+  return 'The upload did not complete.';
+}
 
 export type ProcessingRequest = {
   countryCode: string;
@@ -44,6 +88,8 @@ export async function startProcessing(
   photoUri: string,
   request: ProcessingRequest,
 ): Promise<string> {
+  assertPhotoReadable(photoUri);
+
   const form = new FormData();
   for (const [name, value] of processingParts(photoUri, request)) {
     form.append(name, value as Blob);

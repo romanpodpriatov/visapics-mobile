@@ -14,22 +14,24 @@
  */
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Camera,
+  CommonResolutions,
   type Frame,
   useCameraDevice,
   useFrameOutput,
   usePhotoOutput,
 } from 'react-native-vision-camera';
 import { type Face, useFaceDetectorOutput } from 'react-native-vision-camera-face-detector';
-import { scheduleOnRN } from 'react-native-worklets';
+import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
 
 import { useSpecifications } from '../src/api/hooks';
 import { GUIDE_WIDTH_SHARE, type CaptureSpec, type FrameStats } from '../src/capture/checks';
 import { readFrameStats } from '../src/capture/frameStats';
+import { shouldSample } from '../src/capture/throttle';
 import { useCoaching } from '../src/capture/useCoaching';
 import { useDraftStore } from '../src/store/draft';
 import { theme } from '../src/theme';
@@ -104,9 +106,36 @@ export default function Capture() {
 
   const handleStats = useCallback((stats: FrameStats | null) => onStats(stats), [onStats]);
 
+  /**
+   * When the pixels were last read. A frame's own timestamp is a CMTime on iOS
+   * and nanoseconds on Android, so the throttle uses performance.now() instead:
+   * monotonic milliseconds, and provably present in the worklet runtime — the
+   * worklets initializer calls it there itself.
+   */
+  const lastSampledAt = useMemo(() => createSynchronizable<number | null>(null), []);
+
   const frameOutput = useFrameOutput({
+    // Small preview-sized YUV buffers rather than full-resolution ones.
+    // Measured on a physical iPhone: at full resolution, downloading every
+    // frame to the CPU stalled the camera pipeline — the preview stuttered,
+    // and starved of frames its auto-exposure never converged, so it stayed
+    // dark. VisionCamera documents all three of these as the remedy.
+    targetResolution: CommonResolutions.VGA_4_3,
+    enablePreviewSizedOutputBuffers: true,
+    // readFrameStats reads plane 0 as 8-bit luma, which is what YUV gives it.
+    pixelFormat: 'yuv',
+    // Let the preview come up first; statistics can start a moment later.
+    allowDeferredStart: true,
     onFrame: (frame: Frame) => {
       'worklet';
+      const now = performance.now();
+      if (!shouldSample(now, lastSampledAt.getDirty())) {
+        // Nothing downstream can use this frame: release it and wait.
+        frame.dispose();
+        return;
+      }
+      lastSampledAt.setBlocking(now);
+
       const stats = readFrameStats(frame);
       // The Frame has to be released immediately or the camera pipeline stalls.
       frame.dispose();

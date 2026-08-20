@@ -1,4 +1,4 @@
-import { waitFor } from '@testing-library/react-native';
+import { screen, waitFor } from '@testing-library/react-native';
 
 import Processing from '../app/processing';
 import { ApiError, api } from '../src/api/client';
@@ -10,6 +10,23 @@ const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: mockBack }),
   useLocalSearchParams: () => ({ photo: 'file:///photo.jpg' }),
+}));
+
+/** The photo the screen was handed, as the filesystem reports it. */
+const mockFiles: Record<string, { exists: boolean; size: number | null }> = {};
+jest.mock('expo-file-system', () => ({
+  File: class {
+    uri: string;
+    constructor(uri: string) {
+      this.uri = uri;
+    }
+    get exists() {
+      return mockFiles[this.uri]?.exists ?? false;
+    }
+    get size() {
+      return mockFiles[this.uri]?.size ?? null;
+    }
+  },
 }));
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -56,6 +73,7 @@ describe('processing', () => {
   beforeEach(() => {
     mockReplace.mockClear();
     mockBack.mockClear();
+    mockFiles['file:///photo.jpg'] = { exists: true, size: 240_000 };
     upload = jest.spyOn(api, 'upload').mockResolvedValue({ task_id: 'task-1' } as never);
     useDraftStore.setState({
       countryCode: 'gb',
@@ -124,5 +142,27 @@ describe('processing', () => {
     const view = renderScreen(<Processing />, seeds);
 
     expect(await view.findByText('That photo is too small')).toBeTruthy();
+  });
+});
+
+describe('a photo that is no longer there', () => {
+  beforeEach(() => {
+    mockFiles['file:///photo.jpg'] = { exists: false, size: null };
+    useDraftStore.setState({
+      countryCode: 'gb',
+      documentType: 'UK Passport offline 35x45 mm',
+      removeBackground: true,
+      enhance: true,
+      taskId: null,
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('says so, instead of blaming a server it never contacted', async () => {
+    const sent = jest.spyOn(api, 'upload');
+    renderScreen(<Processing />, seeds);
+
+    expect(await screen.findByText('That photo could not be opened. Choose it again.')).toBeTruthy();
+    expect(sent).not.toHaveBeenCalled();
   });
 });

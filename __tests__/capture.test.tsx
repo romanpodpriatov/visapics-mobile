@@ -1,6 +1,7 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
 
 import Capture from '../app/capture';
+import { readFrameStats } from '../src/capture/frameStats';
 import { useDraftStore } from '../src/store/draft';
 import { renderScreen } from '../src/test-utils';
 
@@ -23,11 +24,27 @@ const mockCapturePhoto = jest.fn(async () => ({
   dispose: jest.fn(),
 }));
 
+/** The options the screen configured its frame output with. */
+let frameOptions: {
+  onFrame: (frame: unknown) => void;
+  enablePreviewSizedOutputBuffers?: boolean;
+  pixelFormat?: string;
+  targetResolution?: { width: number; height: number };
+} | null = null;
+
 jest.mock('react-native-vision-camera', () => ({
   Camera: 'Camera',
   useCameraDevice: () => ({ id: 'front' }),
   usePhotoOutput: () => ({ capturePhoto: mockCapturePhoto }),
-  useFrameOutput: () => ({}),
+  useFrameOutput: (options: never) => {
+    frameOptions = options;
+    return {};
+  },
+  CommonResolutions: { VGA_4_3: { width: 480, height: 640 } },
+}));
+
+jest.mock('../src/capture/frameStats', () => ({
+  readFrameStats: jest.fn(() => ({ luma: 0.5, lumaSpread: 0 })),
 }));
 
 /** Captured so the test can play the detector's part. */
@@ -41,6 +58,16 @@ jest.mock('react-native-vision-camera-face-detector', () => ({
 
 jest.mock('react-native-worklets', () => ({
   scheduleOnRN: (fn: (arg: unknown) => void, arg: unknown) => fn(arg),
+  // A real box, so the throttle under test actually keeps its state.
+  createSynchronizable: (initial: unknown) => {
+    let held = initial;
+    return {
+      getDirty: () => held,
+      setBlocking: (next: unknown) => {
+        held = next;
+      },
+    };
+  },
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -158,5 +185,56 @@ describe('capture', () => {
     see([goodFace]);
 
     expect(screen.getAllByText('Not measured')).toHaveLength(2);
+  });
+});
+
+describe('the frame pipeline', () => {
+  const render = () => {
+    useDraftStore.setState({ countryCode: 'gb', documentType: 'UK Passport 35x45 mm' });
+    renderScreen(<Capture />, seeds);
+  };
+
+  beforeEach(() => {
+    frameOptions = null;
+    jest.mocked(readFrameStats).mockClear();
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  /**
+   * Measured on a physical iPhone: the preview stuttered and went dark. The
+   * frame output was negotiating full-resolution buffers and every single
+   * frame was downloaded to the CPU and handed to the JS thread — which is
+   * exactly what VisionCamera documents as stalling the camera pipeline.
+   */
+  it('asks for small preview-sized buffers rather than full-resolution ones', () => {
+    render();
+
+    expect(frameOptions?.enablePreviewSizedOutputBuffers).toBe(true);
+    expect(frameOptions?.targetResolution).toEqual({ width: 480, height: 640 });
+  });
+
+  it('asks for YUV, which is the format the statistics assume', () => {
+    // readFrameStats reads plane 0 as 8-bit luma. Under 'native' that plane is
+    // whatever the session negotiated, which may not be luma at all.
+    render();
+
+    expect(frameOptions?.pixelFormat).toBe('yuv');
+  });
+
+  it('reads pixels ten times a second while releasing every frame', () => {
+    render();
+
+    const dispose = jest.fn();
+    let now = 1_000;
+    jest.spyOn(performance, 'now').mockImplementation(() => now);
+
+    // Twenty frames, 50ms apart: half a frame interval for a 100ms sample.
+    for (let i = 0; i < 20; i += 1) {
+      frameOptions?.onFrame({ isValid: true, hasPixelBuffer: true, dispose });
+      now += 50;
+    }
+
+    expect(dispose).toHaveBeenCalledTimes(20);
+    expect(jest.mocked(readFrameStats)).toHaveBeenCalledTimes(10);
   });
 });

@@ -16,7 +16,7 @@ import { ApiError } from '../src/api/client';
 import { useSpecifications } from '../src/api/hooks';
 import { Button, Card, UploadErrorSheet, type UploadProblemDetail } from '../src/components';
 import { formatDimensions } from '../src/format';
-import { startProcessing, usePhotoStatus } from '../src/photo/upload';
+import { startProcessing, uploadErrorMessage, usePhotoStatus } from '../src/photo/upload';
 import { failureFromServer } from '../src/photo/validate';
 import { useDraftStore } from '../src/store/draft';
 import { display, eyebrow, shadow, theme } from '../src/theme';
@@ -45,9 +45,7 @@ export default function Processing() {
 
     startProcessing(photo, { countryCode, documentType, removeBackground, enhance })
       .then(setTask)
-      .catch((error: unknown) =>
-        setUploadError(error instanceof ApiError ? error.message : 'Could not reach the server.'),
-      );
+      .catch((error: unknown) => setUploadError(uploadErrorMessage(error)));
   }, [photo, countryCode, documentType, removeBackground, enhance, setTask]);
 
   const status = usePhotoStatus(taskId);
