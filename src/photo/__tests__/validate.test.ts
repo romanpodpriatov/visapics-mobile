@@ -127,6 +127,16 @@ describe('failureFromServer', () => {
     expect(failureFromServer('Multiple faces detected in the photo')).toBe('multi_face');
   });
 
+  it('recognises a photo the pipeline is too small to measure', () => {
+    // Production, against a 300×400 photo: "Image resolution too low. Your
+    // image is 300x400 pixels, but we need at least 992x1275 pixels".
+    expect(
+      failureFromServer(
+        'Image resolution too low. Your image is 300x400 pixels, but we need at least 992x1275 pixels.',
+      ),
+    ).toBe('too_small');
+  });
+
   it('leaves anything else to the general error path', () => {
     expect(failureFromServer('Processing timed out')).toBeNull();
     expect(failureFromServer('')).toBeNull();

@@ -27,7 +27,7 @@ export type PickedAsset = {
   height?: number;
 };
 
-export type UploadProblem = 'too_large' | 'no_face' | 'multi_face';
+export type UploadProblem = 'too_large' | 'too_small' | 'no_face' | 'multi_face';
 
 export type ValidationResult =
   | { ok: true; uri: string }
@@ -88,13 +88,16 @@ export async function prepareForUpload(asset: PickedAsset): Promise<ValidationRe
 }
 
 /**
- * The two processing failures that deserve their own explanation rather than
- * a generic error. The async pipeline reports them as prose, so this reads the
- * prose; anything else falls through to the ordinary error path.
+ * The processing failures that deserve their own explanation rather than a
+ * generic error. The asynchronous pipeline reports them as prose, so this
+ * reads the prose; anything else falls through to the ordinary error path.
  */
-export function failureFromServer(message: string): 'no_face' | 'multi_face' | null {
+export function failureFromServer(message: string): UploadProblem | null {
   const text = (message ?? '').toLowerCase();
   if (text.includes('multiple faces')) return 'multi_face';
   if (text.includes('no face')) return 'no_face';
+  // Seen on production against a 300×400 photo: "Image resolution too low.
+  // Your image is 300x400 pixels, but we need at least 992x1275 pixels".
+  if (text.includes('resolution too low')) return 'too_small';
   return null;
 }

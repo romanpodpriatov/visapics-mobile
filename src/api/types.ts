@@ -181,6 +181,9 @@ export type TaskStatus =
       billing?: unknown;
     };
 
+/** The finished shape, once the task has succeeded. */
+export type CompletedTask = Extract<TaskStatus, { state: 'SUCCESS' }>;
+
 // ── POST /photo/<task>/unlock ──────────────────────────────────────────────
 
 export type UnlockResult = {

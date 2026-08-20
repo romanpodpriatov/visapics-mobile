@@ -11,7 +11,12 @@ import * as ImagePicker from 'expo-image-picker';
 
 import type { PickedAsset } from './validate';
 
-const specimen = require('../../assets/examples/specimen-before.jpg');
+/**
+ * 1600×2133. The onboarding specimen is 300×400, which the server refuses
+ * outright — "Image resolution too low… we need at least 992×1275" — so the
+ * sample photo is its own asset, big enough for the pipeline to work on.
+ */
+const specimen = require('../../assets/sample/specimen.jpg');
 
 export type PickOutcome =
   | { status: 'picked'; asset: PickedAsset }

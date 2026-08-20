@@ -29,6 +29,13 @@ function copyFor(problem: UploadProblemDetail) {
         body: 'The limit is 5 MB. We can convert and compress it for you without losing compliance.',
         cta: 'Convert & continue',
       };
+    case 'too_small':
+      return {
+        glyph: '⤢',
+        title: 'That photo is too small',
+        body: 'The server measures head height in pixels, and this one has too few to measure. Choose a photo straight from the camera rather than one that has been shared through a messaging app.',
+        cta: 'Choose another photo',
+      };
     case 'no_face':
       return {
         glyph: '?',
