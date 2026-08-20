@@ -10,6 +10,8 @@
  * unit row, which would have been a switch that switches nothing.
  */
 import { useQueryClient } from '@tanstack/react-query';
+
+import { forgetCachedAccount } from '../../src/api/cache';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -90,7 +92,7 @@ export default function Account() {
             void useAuthStore
               .getState()
               .forgetDevice()
-              .then(() => queryClient.clear());
+              .then(() => forgetCachedAccount(queryClient));
           },
         },
       ],

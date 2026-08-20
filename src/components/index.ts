@@ -2,6 +2,7 @@ export { Button } from './Button';
 export { Card } from './Card';
 export { ComplianceRow } from './ComplianceRow';
 export { ConsentSheet } from './ConsentSheet';
+export { DeleteAccountSheet } from './DeleteAccountSheet';
 export { Eyebrow } from './Eyebrow';
 export { LibrarySheet } from './LibrarySheet';
 export { Paywall, useIapProducts } from './Paywall';
