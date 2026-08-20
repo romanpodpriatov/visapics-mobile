@@ -10,15 +10,26 @@
  *
  * The print sheet is a 4×6 inch sheet of four photos, not the mock's "A4 · 4 UP".
  */
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, SITE_BASE } from '../src/api/client';
 import { useConfig } from '../src/api/hooks';
 import type { UnlockResult } from '../src/api/types';
-import { Button, Card, ComplianceRow } from '../src/components';
+import { Button, Card, ComplianceRow, Paywall } from '../src/components';
+import { restorePurchases } from '../src/iap';
 import { completed, unlockPhoto, usePhotoStatus } from '../src/photo/upload';
 import { useDraftStore } from '../src/store/draft';
 import { display, eyebrow, hitSlopTo44, shadow, theme } from '../src/theme';
@@ -38,6 +49,9 @@ export default function Result() {
   const [unlocked, setUnlocked] = useState<UnlockResult | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const [needsCredits, setNeedsCredits] = useState(false);
+  const [paywall, setPaywall] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const queryClient = useQueryClient();
 
   const result = completed(status.data);
   const compliance = result?.compliance;
@@ -52,11 +66,32 @@ export default function Result() {
       setUnlocked(await unlockPhoto(taskId));
       setNeedsCredits(false);
     } catch (error: unknown) {
-      // 402 carries the product catalogue: this is where the paywall opens
-      // once Task 9 has one.
-      if (error instanceof ApiError && error.status === 402) setNeedsCredits(true);
+      // 402 carries the product catalogue, and is the only place the paywall
+      // opens: nobody is asked to pay until there is something to pay for.
+      if (error instanceof ApiError && error.status === 402) {
+        // Play Billing is a later delta, so on Android there is nothing to
+        // open — saying so is better than a sheet that cannot sell anything.
+        if (Platform.OS === 'ios') setPaywall(true);
+        else setNeedsCredits(true);
+      }
     } finally {
       setUnlocking(false);
+    }
+  };
+
+  const afterCredits = async () => {
+    setPaywall(false);
+    await queryClient.invalidateQueries({ queryKey: ['credits'] });
+    await unlock();
+  };
+
+  const restore = async () => {
+    setRestoring(true);
+    try {
+      const { restored } = await restorePurchases();
+      if (restored > 0) await afterCredits();
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -216,6 +251,14 @@ export default function Result() {
           </Text>
         </Card>
       ) : null}
+
+      <Paywall
+        visible={paywall}
+        onClose={() => setPaywall(false)}
+        onPurchased={() => void afterCredits()}
+        onRestore={() => void restore()}
+        restoring={restoring}
+      />
 
       {config ? <Text style={styles.disclaimer}>{config.legal.disclaimer}</Text> : null}
       <View style={{ height: insets.bottom + theme.space.xl }} />

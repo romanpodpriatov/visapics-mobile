@@ -10,6 +10,14 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: jest.fn() }),
 }));
 
+jest.mock('../src/iap', () => ({
+  ...jest.requireActual('../src/iap/products'),
+  purchase: jest.fn(),
+  fetchIapProducts: jest.fn(async () => []),
+  restorePurchases: jest.fn(async () => ({ restored: 0 })),
+  initIAP: jest.fn(),
+}));
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(async () => null),
   setItem: jest.fn(async () => undefined),
@@ -192,7 +200,9 @@ describe('result', () => {
     expect(screen.getByText(/links stay valid for 15 minutes/)).toBeTruthy();
   });
 
-  it('says so when there are no credits left, rather than failing quietly', async () => {
+  it('opens the paywall when there are no credits left', async () => {
+    // The 402 is the only thing that opens it: nobody is asked to pay until
+    // there is something to pay for.
     serve(PRODUCTION_STATUS);
     jest
       .spyOn(api, 'post')
@@ -201,8 +211,14 @@ describe('result', () => {
 
     fireEvent.press(await screen.findByText('Unlock & download'));
 
-    await waitFor(() =>
-      expect(screen.getByText(/no photo credits left on this device/)).toBeTruthy(),
-    );
+    expect(await screen.findByText('Pay once. Retake free.')).toBeTruthy();
+  });
+
+  it('does not open the paywall before anything has been refused', async () => {
+    serve(PRODUCTION_STATUS);
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText('Unlock this photo')).toBeTruthy();
+    expect(screen.queryByText('Pay once. Retake free.')).toBeNull();
   });
 });

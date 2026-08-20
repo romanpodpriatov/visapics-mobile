@@ -4,6 +4,7 @@ export { ComplianceRow } from './ComplianceRow';
 export { ConsentSheet } from './ConsentSheet';
 export { Eyebrow } from './Eyebrow';
 export { LibrarySheet } from './LibrarySheet';
+export { Paywall, useIapProducts } from './Paywall';
 export { Sheet } from './Sheet';
 export { Toast } from './Toast';
 export { Toggle } from './Toggle';

@@ -15,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import { retryPolicy } from '../src/api/hooks';
+import { initIAP } from '../src/iap';
 import { useAuthStore } from '../src/store/auth';
 import { useConsentStore } from '../src/store/consent';
 import { useDraftStore } from '../src/store/draft';
@@ -57,7 +58,15 @@ export default function RootLayout() {
     if (!authHydrated) return;
     // Not awaited, and failure is not fatal: without a session the catalogue
     // still reads, and the first call that needs one will say so.
-    void useAuthStore.getState().ensureSession().catch(() => undefined);
+    //
+    // The purchase replay is chained behind the session rather than started
+    // beside it: verification needs a bearer token, and replaying before there
+    // is one would 401 every pending purchase and leave it unfinished forever.
+    void useAuthStore
+      .getState()
+      .ensureSession()
+      .then(() => initIAP())
+      .catch(() => undefined);
   }, [authHydrated]);
 
   const ready =
