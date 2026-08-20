@@ -15,3 +15,24 @@ jest.mock('react-native-iap', () => ({
   fetchProducts: jest.fn(async () => []),
   ErrorCode: { UserCancelled: 'user-cancelled' },
 }));
+
+/**
+ * No test talks to the network.
+ *
+ * A query that slips through — an invalidate that refetches, an `enabled` that
+ * is truer than it looks — used to reach production and leave the run hanging
+ * on an open socket. Failing loudly is easier to find than a suite that takes
+ * two minutes to not exit.
+ */
+globalThis.fetch = jest.fn(() =>
+  Promise.reject(
+    new Error('Network request in a test. Seed the query cache or mock the api client.'),
+  ),
+);
+
+// The stub above lives for the whole file, so its call list would carry over
+// from one test to the next — and a test reading `mock.calls[0]` would read
+// somebody else's request.
+beforeEach(() => {
+  if (jest.isMockFunction(globalThis.fetch)) globalThis.fetch.mockClear();
+});
