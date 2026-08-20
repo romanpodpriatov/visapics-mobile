@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import Result from '../app/result';
 import { ApiError, api } from '../src/api/client';
+import { saveToVault } from '../src/api/vault';
 import { saveToFiles, saveToPhotos } from '../src/photo/download';
 import { useDraftStore } from '../src/store/draft';
 import { configFixture, renderScreen } from '../src/test-utils';
@@ -9,6 +10,10 @@ import { configFixture, renderScreen } from '../src/test-utils';
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: jest.fn() }),
+}));
+
+jest.mock('../src/api/vault', () => ({
+  saveToVault: jest.fn(async () => undefined),
 }));
 
 jest.mock('../src/photo/download', () => ({
@@ -274,5 +279,22 @@ describe('result', () => {
 
     expect(await screen.findByText('Unlock this photo')).toBeTruthy();
     expect(screen.queryByText('Pay once. Retake free.')).toBeNull();
+  });
+
+  it('keeps the photo in the vault, with the document it was made for', async () => {
+    serve(PRODUCTION_STATUS);
+    unlockGrants();
+    renderScreen(<Result />, seeds);
+
+    fireEvent.press(await screen.findByText('Unlock & download'));
+    fireEvent.press(await screen.findByText('Save to vault'));
+
+    await waitFor(() =>
+      expect(saveToVault).toHaveBeenCalledWith('file:///cache/photo.jpg', {
+        countryCode: 'gb',
+        documentType: 'UK Passport offline 35x45 mm',
+      }),
+    );
+    expect(await screen.findByText('Saved to your vault')).toBeTruthy();
   });
 });

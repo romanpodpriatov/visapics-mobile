@@ -11,6 +11,18 @@ export const SITE_BASE = 'https://visapics.org';
 export const API_BASE = `${SITE_BASE}/api/v1`;
 
 /**
+ * The account API the website has always had, at /api rather than /api/v1.
+ * The vault lives there. It answers with plain objects instead of the
+ * {success, data} envelope, so it is read differently — but it is the same
+ * host, the same bearer token and the same silent refresh.
+ */
+export const ACCOUNT_API_BASE = `${SITE_BASE}/api`;
+
+type Surface = { base: string; enveloped: boolean };
+const V1: Surface = { base: API_BASE, enveloped: true };
+const ACCOUNT: Surface = { base: ACCOUNT_API_BASE, enveloped: false };
+
+/**
  * Refresh lives on the site's auth blueprint, not under /api/v1, and it is
  * jwt_required(refresh=True) — so it takes the refresh token as the bearer and
  * answers with a bare {access_token}, outside the envelope every other route
@@ -94,7 +106,12 @@ async function refreshSession(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function request<T>(path: string, init: RequestInit = {}, retrying = false): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  retrying = false,
+  surface: Surface = V1,
+): Promise<T> {
   if (path.startsWith('http')) {
     throw new Error('api paths must be relative; absolute URLs are refused');
   }
@@ -107,10 +124,10 @@ async function request<T>(path: string, init: RequestInit = {}, retrying = false
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const res = await fetch(`${surface.base}${path}`, { ...init, headers });
 
   if (res.status === 401 && !retrying) {
-    if (await refreshSession()) return request<T>(path, init, true);
+    if (await refreshSession()) return request<T>(path, init, true, surface);
   }
 
   let body: Envelope<T>;
@@ -124,8 +141,27 @@ async function request<T>(path: string, init: RequestInit = {}, retrying = false
     throw toApiError(body, res.status);
   }
 
-  return body.data as T;
+  return (surface.enveloped ? body.data : body) as T;
 }
+
+/** The account API at /api — the vault, and nothing else so far. */
+export const account = {
+  get: <T>(path: string) => request<T>(path, {}, false, ACCOUNT),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(
+      path,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      },
+      false,
+      ACCOUNT,
+    ),
+  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }, false, ACCOUNT),
+  upload: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: 'POST', body: form as unknown as BodyInit }, false, ACCOUNT),
+};
 
 export const api = {
   get: <T>(path: string) => request<T>(path),

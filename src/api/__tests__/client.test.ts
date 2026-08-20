@@ -1,4 +1,4 @@
-import { ApiError, REFRESH_URL, api } from '../client';
+import { ACCOUNT_API_BASE, ApiError, REFRESH_URL, account, api } from '../client';
 import { useAuthStore } from '../../store/auth';
 
 /** The `{success, data}` envelope every /api/v1 route returns. */
@@ -149,5 +149,28 @@ describe('api client', () => {
     const spy = jest.spyOn(globalThis, 'fetch').mockReturnValue(ok({}) as never);
     await expect(api.get('https://evil.example/steal')).rejects.toThrow(/absolute/);
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('reads the account API, which answers without an envelope', async () => {
+    // /api/vaults predates /api/v1 and returns a plain object.
+    const spy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockReturnValue(raw(200, { vaults: [{ id: 4 }], total: 1 }) as never);
+
+    await expect(account.get('/vaults')).resolves.toEqual({ vaults: [{ id: 4 }], total: 1 });
+    expect(spy.mock.calls[0][0]).toBe(`${ACCOUNT_API_BASE}/vaults`);
+  });
+
+  it('sends the same bearer token to the account API', async () => {
+    const spy = jest.spyOn(globalThis, 'fetch').mockReturnValue(raw(200, {}) as never);
+    useAuthStore.setState({ accessToken: 'tok-123' });
+
+    await account.get('/vaults');
+
+    expect(headersOf(spy.mock.calls[0] as never).Authorization).toBe('Bearer tok-123');
+  });
+
+  it('refuses an absolute URL on the account API too', async () => {
+    await expect(account.get('https://evil.example/vaults')).rejects.toThrow(/absolute/);
   });
 });

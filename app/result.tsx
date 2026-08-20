@@ -26,10 +26,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, SITE_BASE } from '../src/api/client';
 import { useConfig } from '../src/api/hooks';
+import { saveToVault } from '../src/api/vault';
 import type { UnlockResult } from '../src/api/types';
 import { Button, Card, ComplianceRow, Paywall } from '../src/components';
 import { restorePurchases } from '../src/iap';
-import { saveToFiles, saveToPhotos } from '../src/photo/download';
+import { downloadToCache, saveToFiles, saveToPhotos } from '../src/photo/download';
 import { completed, unlockPhoto, usePhotoStatus } from '../src/photo/upload';
 import { useDraftStore } from '../src/store/draft';
 import { display, eyebrow, hitSlopTo44, shadow, theme } from '../src/theme';
@@ -42,6 +43,7 @@ export default function Result() {
   const { data: config } = useConfig();
 
   const taskId = useDraftStore((s) => s.taskId);
+  const countryCode = useDraftStore((s) => s.countryCode);
   const documentType = useDraftStore((s) => s.documentType);
   const markUnlocked = useDraftStore((s) => s.markUnlocked);
   const status = usePhotoStatus(taskId);
@@ -55,6 +57,7 @@ export default function Result() {
   const [expired, setExpired] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<'saved' | 'denied' | null>(null);
+  const [savedToVault, setSavedToVault] = useState(false);
   const queryClient = useQueryClient();
 
   const result = completed(status.data);
@@ -94,14 +97,26 @@ export default function Result() {
     await unlock();
   };
 
-  const save = async (where: 'photos' | 'files') => {
+  const save = async (where: 'photos' | 'files' | 'vault') => {
     if (!unlocked) return;
     const url = absolute(unlocked.digital_photo_url);
     setSaving(true);
     setSaved(null);
     try {
-      if (where === 'files') await saveToFiles(url);
-      else setSaved(await saveToPhotos(url));
+      if (where === 'files') {
+        await saveToFiles(url);
+      } else if (where === 'vault') {
+        // The vault takes a file, not a URL, and the URL expires shortly.
+        const local = await downloadToCache(url);
+        await saveToVault(local, {
+          countryCode: countryCode ?? '',
+          documentType: documentType ?? '',
+        });
+        await queryClient.invalidateQueries({ queryKey: ['vault-photos'] });
+        setSavedToVault(true);
+      } else {
+        setSaved(await saveToPhotos(url));
+      }
     } finally {
       setSaving(false);
     }
@@ -256,6 +271,12 @@ export default function Result() {
             label="Save to Files"
             variant="secondary"
             onPress={() => void save('files')}
+          />
+          <Button
+            label={savedToVault ? 'Saved to your vault' : 'Save to vault'}
+            variant="secondary"
+            disabled={savedToVault}
+            onPress={() => void save('vault')}
           />
           {saved === 'denied' ? (
             <Text style={styles.expiry}>
