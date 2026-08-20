@@ -1,4 +1,4 @@
-import { deletionLabel, hoursLeft, useDraftStore } from '../draft';
+import { useDraftStore } from '../draft';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -75,28 +75,5 @@ describe('draft store', () => {
   it('finishes hydrating even when nothing was saved', async () => {
     await useDraftStore.getState().hydrate();
     expect(useDraftStore.getState().hydrated).toBe(true);
-  });
-});
-
-describe('how long the server will keep the photo', () => {
-  const startedAt = 1_000_000_000_000;
-
-  it('counts down from the retention the server reports', () => {
-    expect(hoursLeft(startedAt, 24, startedAt + 2 * HOUR)).toBe(22);
-    expect(hoursLeft(startedAt, 168, startedAt + 2 * HOUR)).toBe(166);
-  });
-
-  it('rounds down, so it never promises more time than there is', () => {
-    expect(hoursLeft(startedAt, 24, startedAt + 1.5 * HOUR)).toBe(22);
-  });
-
-  it('reaches zero once the file is gone', () => {
-    expect(hoursLeft(startedAt, 24, startedAt + 40 * HOUR)).toBe(0);
-  });
-
-  it('reads in days once hours stop being useful', () => {
-    expect(deletionLabel(22)).toBe('22 h');
-    expect(deletionLabel(166)).toBe('6 days');
-    expect(deletionLabel(48)).toBe('2 days');
   });
 });

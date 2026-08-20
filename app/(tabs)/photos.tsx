@@ -14,8 +14,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useConfig, useCredits, useSpecifications } from '../../src/api/hooks';
 import { Button, Card, Toggle } from '../../src/components';
 import { CameraIcon, ChevronIcon, ImageIcon, InfoIcon } from '../../src/components/icons';
-import { creditLabel, flagEmoji, formatDimensions, verifiedLine } from '../../src/format';
-import { deletionLabel, hoursLeft, useDraftStore } from '../../src/store/draft';
+import {
+  creditLabel,
+  deletionLabel,
+  flagEmoji,
+  formatDimensions,
+  hoursLeft,
+  verifiedLine,
+} from '../../src/format';
+import { useDraftStore } from '../../src/store/draft';
 import { display, eyebrow, shadow, theme } from '../../src/theme';
 
 /** The countries people arrive looking for. Every code exists in the catalogue. */

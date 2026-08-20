@@ -90,19 +90,3 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     void get().persist();
   },
 }));
-
-/**
- * Whole hours before the server deletes the file, floored so the card never
- * promises more time than there is. `retentionHours` comes from
- * /api/v1/config — the app does not hold an opinion about it.
- */
-export function hoursLeft(startedAt: number, retentionHours: number, now: number): number {
-  const elapsed = (now - startedAt) / (60 * 60 * 1000);
-  return Math.max(0, Math.floor(retentionHours - elapsed));
-}
-
-/** "22 h" while that is meaningful, "6 days" once it stops being. */
-export function deletionLabel(hours: number): string {
-  if (hours >= 48) return `${Math.floor(hours / 24)} days`;
-  return `${hours} h`;
-}

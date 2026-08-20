@@ -1,6 +1,8 @@
 import type { Specification } from '../api/types';
 import {
   buildRules,
+  deletionLabel,
+  hoursLeft,
   formatSpecDate,
   buildSpecRows,
   creditLabel,
@@ -189,5 +191,29 @@ describe('formatSpecDate', () => {
 
   it('gives back nothing when the server has no date', () => {
     expect(formatSpecDate(null)).toBeNull();
+  });
+});
+
+describe('how long the server will keep the photo', () => {
+  const startedAt = 1_000_000_000_000;
+  const HOUR = 60 * 60 * 1000;
+
+  it('counts down from the retention the server reports', () => {
+    expect(hoursLeft(startedAt, 24, startedAt + 2 * HOUR)).toBe(22);
+    expect(hoursLeft(startedAt, 168, startedAt + 2 * HOUR)).toBe(166);
+  });
+
+  it('rounds down, so it never promises more time than there is', () => {
+    expect(hoursLeft(startedAt, 24, startedAt + 1.5 * HOUR)).toBe(22);
+  });
+
+  it('reaches zero once the file is gone', () => {
+    expect(hoursLeft(startedAt, 24, startedAt + 40 * HOUR)).toBe(0);
+  });
+
+  it('reads in days once hours stop being useful', () => {
+    expect(deletionLabel(22)).toBe('22 h');
+    expect(deletionLabel(166)).toBe('6 days');
+    expect(deletionLabel(48)).toBe('2 days');
   });
 });

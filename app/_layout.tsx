@@ -16,6 +16,7 @@ import { useEffect } from 'react';
 
 import { retryPolicy } from '../src/api/hooks';
 import { useAuthStore } from '../src/store/auth';
+import { useConsentStore } from '../src/store/consent';
 import { useDraftStore } from '../src/store/draft';
 import { useOnboardingStore } from '../src/store/onboarding';
 import { theme } from '../src/theme';
@@ -43,11 +44,13 @@ export default function RootLayout() {
   const authHydrated = useAuthStore((s) => s.hydrated);
   const draftHydrated = useDraftStore((s) => s.hydrated);
   const onboardingHydrated = useOnboardingStore((s) => s.hydrated);
+  const consentHydrated = useConsentStore((s) => s.hydrated);
 
   useEffect(() => {
     void useAuthStore.getState().hydrate();
     void useDraftStore.getState().hydrate();
     void useOnboardingStore.getState().hydrate();
+    void useConsentStore.getState().hydrate();
   }, []);
 
   useEffect(() => {
@@ -57,7 +60,12 @@ export default function RootLayout() {
     void useAuthStore.getState().ensureSession().catch(() => undefined);
   }, [authHydrated]);
 
-  const ready = (fontsLoaded || fontError) && authHydrated && draftHydrated && onboardingHydrated;
+  const ready =
+    (fontsLoaded || fontError) &&
+    authHydrated &&
+    draftHydrated &&
+    onboardingHydrated &&
+    consentHydrated;
 
   useEffect(() => {
     // Proceed on a font error as well as on success: a font that failed to
