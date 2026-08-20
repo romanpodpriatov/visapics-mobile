@@ -49,6 +49,26 @@ describe('draft store', () => {
     expect(useDraftStore.getState().taskStartedAt).toEqual(expect.any(Number));
   });
 
+  it('remembers that a photo has been paid for', () => {
+    // The status endpoint cannot tell us: it reports the mode the task ran in,
+    // which stays "preview" for ever.
+    useDraftStore.getState().setTask('task-1');
+    expect(useDraftStore.getState().unlockedAt).toBeNull();
+
+    useDraftStore.getState().markUnlocked();
+
+    expect(useDraftStore.getState().unlockedAt).toEqual(expect.any(Number));
+  });
+
+  it('a new photo is not paid for just because the last one was', () => {
+    useDraftStore.getState().setTask('task-1');
+    useDraftStore.getState().markUnlocked();
+
+    useDraftStore.getState().setTask('task-2');
+
+    expect(useDraftStore.getState().unlockedAt).toBeNull();
+  });
+
   it('reset drops the task but keeps the document for the next photo', () => {
     useDraftStore.getState().setSpec('gb', 'UK Passport 35x45 mm');
     useDraftStore.getState().setTask('task-1');

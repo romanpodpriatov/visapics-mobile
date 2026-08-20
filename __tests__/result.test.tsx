@@ -2,12 +2,19 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import Result from '../app/result';
 import { ApiError, api } from '../src/api/client';
+import { saveToFiles, saveToPhotos } from '../src/photo/download';
 import { useDraftStore } from '../src/store/draft';
 import { configFixture, renderScreen } from '../src/test-utils';
 
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: jest.fn() }),
+}));
+
+jest.mock('../src/photo/download', () => ({
+  saveToPhotos: jest.fn(async () => 'saved'),
+  saveToFiles: jest.fn(async () => undefined),
+  downloadToCache: jest.fn(async () => 'file:///cache/photo.jpg'),
 }));
 
 jest.mock('../src/iap', () => ({
@@ -183,8 +190,7 @@ describe('result', () => {
     expect(await screen.findByText('26.4 mm / 29–34 mm')).toBeTruthy();
   });
 
-  it('unlocks with a credit and offers the download', async () => {
-    serve(PRODUCTION_STATUS);
+  const unlockGrants = () =>
     jest.spyOn(api, 'post').mockResolvedValue({
       task_id: 'task-1',
       unlocked: true,
@@ -192,12 +198,60 @@ describe('result', () => {
       digital_photo_url: '/api/v1/photo/download/tok',
       expires_in: 900,
     } as never);
+
+  it('unlocks with a credit and offers to save', async () => {
+    serve(PRODUCTION_STATUS);
+    unlockGrants();
     renderScreen(<Result />, seeds);
 
     fireEvent.press(await screen.findByText('Unlock & download'));
 
-    expect(await screen.findByText('Download digital + print sheet')).toBeTruthy();
+    expect(await screen.findByText('Save to Photos')).toBeTruthy();
+    expect(screen.getByText('Save to Files')).toBeTruthy();
     expect(screen.getByText(/links stay valid for 15 minutes/)).toBeTruthy();
+  });
+
+  it('saves the unlocked photo, by its absolute URL', async () => {
+    serve(PRODUCTION_STATUS);
+    unlockGrants();
+    renderScreen(<Result />, seeds);
+
+    fireEvent.press(await screen.findByText('Unlock & download'));
+    fireEvent.press(await screen.findByText('Save to Photos'));
+
+    await waitFor(() =>
+      expect(saveToPhotos).toHaveBeenCalledWith(
+        'https://visapics.org/api/v1/photo/download/tok',
+      ),
+    );
+    expect(await screen.findByText('Saved to your photo library.')).toBeTruthy();
+  });
+
+  it('offers Files when the photo library was refused', async () => {
+    serve(PRODUCTION_STATUS);
+    unlockGrants();
+    jest.mocked(saveToPhotos).mockResolvedValue('denied');
+    renderScreen(<Result />, seeds);
+
+    fireEvent.press(await screen.findByText('Unlock & download'));
+    fireEvent.press(await screen.findByText('Save to Photos'));
+
+    expect(await screen.findByText(/Save to Files instead/)).toBeTruthy();
+    expect(saveToFiles).not.toHaveBeenCalled();
+  });
+
+  it('says plainly when the photo has been deleted rather than showing an error', async () => {
+    // 410 is not a fault: processed files go after the retention window.
+    serve(PRODUCTION_STATUS);
+    jest
+      .spyOn(api, 'post')
+      .mockRejectedValue(new ApiError('Processed file is no longer available', 410, 'E410_EXPIRED'));
+    renderScreen(<Result />, seeds);
+
+    fireEvent.press(await screen.findByText('Unlock & download'));
+
+    expect(await screen.findByText('◆ This photo has expired')).toBeTruthy();
+    expect(screen.getByText('Take a new photo')).toBeTruthy();
   });
 
   it('opens the paywall when there are no credits left', async () => {

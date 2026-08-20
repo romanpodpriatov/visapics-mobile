@@ -18,6 +18,13 @@ type Saved = {
   enhance: boolean;
   taskId: string | null;
   taskStartedAt: number | null;
+  /**
+   * When this photo was paid for. The status endpoint cannot say: it reports
+   * the mode the task ran in, which stays "preview" for ever. Unlocking again
+   * is free and idempotent on the server, so this only has to be good enough
+   * to know whether anyone has paid yet.
+   */
+  unlockedAt: number | null;
 };
 
 type DraftState = Saved & {
@@ -27,6 +34,7 @@ type DraftState = Saved & {
   setSpec: (countryCode: string, documentType: string) => void;
   setOption: (option: 'removeBackground' | 'enhance', value: boolean) => void;
   setTask: (taskId: string | null) => void;
+  markUnlocked: () => void;
   reset: () => void;
 };
 
@@ -39,6 +47,7 @@ const EMPTY: Saved = {
   enhance: true,
   taskId: null,
   taskStartedAt: null,
+  unlockedAt: null,
 };
 
 export const useDraftStore = create<DraftState>((set, get) => ({
@@ -53,6 +62,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
 
   persist: async () => {
     const { countryCode, documentType, removeBackground, enhance, taskId, taskStartedAt } = get();
+    const { unlockedAt } = get();
     await AsyncStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
@@ -62,6 +72,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
         enhance,
         taskId,
         taskStartedAt,
+        unlockedAt,
       } satisfies Saved),
     );
   },
@@ -79,14 +90,19 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   setTask: (taskId) => {
     // The clock starts here, not when the result arrives: the server's
     // retention window runs from the upload.
-    set({ taskId, taskStartedAt: taskId ? Date.now() : null });
+    set({ taskId, taskStartedAt: taskId ? Date.now() : null, unlockedAt: null });
+    void get().persist();
+  },
+
+  markUnlocked: () => {
+    set({ unlockedAt: Date.now() });
     void get().persist();
   },
 
   reset: () => {
     // The document stays. Someone who has just made a UK passport photo is
     // most likely about to make another one.
-    set({ taskId: null, taskStartedAt: null });
+    set({ taskId: null, taskStartedAt: null, unlockedAt: null });
     void get().persist();
   },
 }));

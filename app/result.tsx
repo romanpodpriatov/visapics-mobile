@@ -15,7 +15,6 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   Image,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -30,6 +29,7 @@ import { useConfig } from '../src/api/hooks';
 import type { UnlockResult } from '../src/api/types';
 import { Button, Card, ComplianceRow, Paywall } from '../src/components';
 import { restorePurchases } from '../src/iap';
+import { saveToFiles, saveToPhotos } from '../src/photo/download';
 import { completed, unlockPhoto, usePhotoStatus } from '../src/photo/upload';
 import { useDraftStore } from '../src/store/draft';
 import { display, eyebrow, hitSlopTo44, shadow, theme } from '../src/theme';
@@ -43,6 +43,7 @@ export default function Result() {
 
   const taskId = useDraftStore((s) => s.taskId);
   const documentType = useDraftStore((s) => s.documentType);
+  const markUnlocked = useDraftStore((s) => s.markUnlocked);
   const status = usePhotoStatus(taskId);
 
   const [tab, setTab] = useState<'digital' | 'print'>('digital');
@@ -51,6 +52,9 @@ export default function Result() {
   const [needsCredits, setNeedsCredits] = useState(false);
   const [paywall, setPaywall] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<'saved' | 'denied' | null>(null);
   const queryClient = useQueryClient();
 
   const result = completed(status.data);
@@ -64,11 +68,16 @@ export default function Result() {
     setUnlocking(true);
     try {
       setUnlocked(await unlockPhoto(taskId));
+      markUnlocked();
       setNeedsCredits(false);
     } catch (error: unknown) {
       // 402 carries the product catalogue, and is the only place the paywall
       // opens: nobody is asked to pay until there is something to pay for.
-      if (error instanceof ApiError && error.status === 402) {
+      // 410 is not a fault: processed files are deleted after the retention
+      // window, and saying so plainly beats a generic error.
+      if (error instanceof ApiError && (error.status === 410 || error.status === 409)) {
+        setExpired(true);
+      } else if (error instanceof ApiError && error.status === 402) {
         // Play Billing is a later delta, so on Android there is nothing to
         // open — saying so is better than a sheet that cannot sell anything.
         if (Platform.OS === 'ios') setPaywall(true);
@@ -83,6 +92,19 @@ export default function Result() {
     setPaywall(false);
     await queryClient.invalidateQueries({ queryKey: ['credits'] });
     await unlock();
+  };
+
+  const save = async (where: 'photos' | 'files') => {
+    if (!unlocked) return;
+    const url = absolute(unlocked.digital_photo_url);
+    setSaving(true);
+    setSaved(null);
+    try {
+      if (where === 'files') await saveToFiles(url);
+      else setSaved(await saveToPhotos(url));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const restore = async () => {
@@ -226,12 +248,37 @@ export default function Result() {
       ) : unlocked ? (
         <View style={styles.unlockedActions}>
           <Button
-            label="Download digital + print sheet"
-            onPress={() => void Linking.openURL(absolute(unlocked.digital_photo_url))}
+            label="Save to Photos"
+            busy={saving}
+            onPress={() => void save('photos')}
           />
-          <Text style={styles.expiry}>
-            Your links stay valid for {Math.round((unlocked.expires_in ?? 900) / 60)} minutes.
+          <Button
+            label="Save to Files"
+            variant="secondary"
+            onPress={() => void save('files')}
+          />
+          {saved === 'denied' ? (
+            <Text style={styles.expiry}>
+              VisaPics needs permission to add to your photo library. Save to Files instead, or
+              turn it on in Settings.
+            </Text>
+          ) : saved === 'saved' ? (
+            <Text style={styles.expiry}>Saved to your photo library.</Text>
+          ) : (
+            <Text style={styles.expiry}>
+              Your download links stay valid for{' '}
+              {Math.round((unlocked.expires_in ?? 900) / 60)} minutes.
+            </Text>
+          )}
+        </View>
+      ) : expired ? (
+        <View style={styles.failCard}>
+          <Text style={styles.failEyebrow}>◆ This photo has expired</Text>
+          <Text style={styles.failBody}>
+            Photos are deleted from the server after the retention window, and this one is gone.
+            Nothing was charged for it.
           </Text>
+          <Button label="Take a new photo" onPress={() => router.replace('/permission')} />
         </View>
       ) : result?.unlock_required ? (
         <Card style={styles.unlockCard}>
