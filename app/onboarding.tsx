@@ -106,7 +106,12 @@ export default function Onboarding() {
   const next = () => (index < slides.length - 1 ? setIndex(index + 1) : finish());
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + theme.space.sm }]}>
+    <View
+      style={[
+        styles.screen,
+        { paddingTop: insets.top + theme.space.sm, paddingBottom: insets.bottom + theme.space.md },
+      ]}
+    >
       <View style={styles.header}>
         <Text style={styles.wordmark}>VisaPics</Text>
         <Pressable onPress={finish} accessibilityRole="button" hitSlop={12}>
@@ -141,7 +146,7 @@ export default function Onboarding() {
         </View>
       </View>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + theme.space.xxl }]}>
+      <View style={[styles.footer, { paddingBottom: theme.space.md }]}>
         <View style={styles.dots}>
           {slides.map((s, i) => (
             <View key={s.eyebrow} style={[styles.dot, i === index && styles.dotActive]} />
@@ -154,6 +159,8 @@ export default function Onboarding() {
           trailingIcon={<ArrowRightIcon size={16} />}
         />
       </View>
+
+      {config ? <Text style={styles.disclaimer}>{config.legal.disclaimer}</Text> : null}
     </View>
   );
 }
@@ -245,6 +252,14 @@ const styles = StyleSheet.create({
   footRight: { ...eyebrow, fontSize: 9.5, letterSpacing: 1.14, color: theme.color.success },
 
   footer: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  disclaimer: {
+    fontFamily: theme.type.body,
+    fontSize: 10.5,
+    lineHeight: 15,
+    color: theme.color.faint,
+    textAlign: 'center',
+    paddingBottom: theme.space.lg,
+  },
   dots: { flexDirection: 'row', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.color.borderStrong },
   dotActive: { width: 20, backgroundColor: theme.color.brand },

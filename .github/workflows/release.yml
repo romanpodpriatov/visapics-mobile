@@ -1,0 +1,133 @@
+name: Release
+
+# A signed build, uploaded to TestFlight.
+#
+# Every credential here is a repository secret and none of them may ever enter
+# the repository: it is public, and a leaked signing certificate means revoking
+# it and reissuing every build. Set them with `gh secret set`:
+#
+#   APPLE_CERTIFICATE_P12          base64 of the distribution .p12
+#   APPLE_CERTIFICATE_PASSWORD     its password
+#   APPLE_PROVISIONING_PROFILE     base64 of the App Store .mobileprovision
+#   APP_STORE_CONNECT_KEY_ID       the API key id
+#   APP_STORE_CONNECT_ISSUER_ID    the issuer id
+#   APP_STORE_CONNECT_KEY_P8       the contents of the .p8
+#
+# Until they exist, uploading from Xcode on a laptop is one menu item and is a
+# perfectly good substitute. Do not hold the submission for this workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: Build number to stamp (must be higher than the last upload)
+        required: true
+        type: string
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Stamp the build number
+        run: |
+          node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            app.expo.ios.buildNumber = process.env.BUILD_NUMBER;
+            app.expo.android.versionCode = Number(process.env.BUILD_NUMBER);
+            fs.writeFileSync("app.json", JSON.stringify(app, null, 2) + "\n");
+          '
+        env:
+          BUILD_NUMBER: ${{ inputs.build_number }}
+
+      - name: Generate the native project
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install pods
+        working-directory: ios
+        run: pod install
+
+      - name: Import the signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          # A throwaway keychain, so nothing is left behind on the runner.
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROVISIONING_PROFILE" | base64 --decode \
+            > ~/Library/MobileDevice/Provisioning\ Profiles/visapics.mobileprovision
+
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
+      - name: Build the signed archive
+        working-directory: ios
+        run: |
+          xcodebuild -workspace VisaPics.xcworkspace \
+            -scheme VisaPics \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/VisaPics.xcarchive" \
+            archive
+
+      - name: Export the IPA
+        run: |
+          cat > "$RUNNER_TEMP/export.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>export</string>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/VisaPics.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -exportPath "$RUNNER_TEMP/export"
+
+      - name: Upload to TestFlight
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/export/VisaPics.ipa" \
+            --apiKey "$KEY_ID" \
+            --apiIssuer "$ISSUER_ID"
+          rm -f ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: visapics-ios-${{ inputs.build_number }}
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: warn

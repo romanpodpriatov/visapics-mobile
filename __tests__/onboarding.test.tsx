@@ -76,4 +76,11 @@ describe('onboarding', () => {
     expect(screen.queryByText(/specs verified/)).toBeNull();
     expect(screen.getByText('Make my photo')).toBeTruthy();
   });
+
+  it('carries the non-affiliation disclaimer from the first screen on', () => {
+    // Required on onboarding, requirements and the result: the app shows
+    // government requirements and must not imply the government endorses it.
+    renderScreen(<Onboarding />, withConfig);
+    expect(screen.getByText(configFixture.legal.disclaimer)).toBeTruthy();
+  });
 });
