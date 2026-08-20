@@ -74,8 +74,12 @@ export const useCountries = () => useQuery(countriesQuery());
 /** The documents of one country, once a country has been chosen. */
 export const useSpecifications = (countryCode: string) =>
   useQuery({ ...specificationsQuery(countryCode), enabled: countryCode.length > 0 });
+/** One document, once both halves of its identity are known. */
 export const useSpecification = (countryCode: string, documentType: string) =>
-  useQuery(specificationQuery(countryCode, documentType));
+  useQuery({
+    ...specificationQuery(countryCode, documentType),
+    enabled: countryCode.length > 0 && documentType.length > 0,
+  });
 /**
  * The balance, once there is a session to ask with. Before then the call is a
  * guaranteed 401, and several of those at launch is how a refresh token gets

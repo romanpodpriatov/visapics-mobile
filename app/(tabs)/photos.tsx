@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useConfig, useCredits, useSpecifications } from '../../src/api/hooks';
 import { Button, Card, Toggle } from '../../src/components';
 import { CameraIcon, ChevronIcon, ImageIcon, InfoIcon } from '../../src/components/icons';
-import { creditLabel, flagEmoji, photoSize, verifiedLine } from '../../src/format';
+import { creditLabel, flagEmoji, formatDimensions, verifiedLine } from '../../src/format';
 import { deletionLabel, hoursLeft, useDraftStore } from '../../src/store/draft';
 import { display, eyebrow, shadow, theme } from '../../src/theme';
 
@@ -49,7 +49,7 @@ export default function Photos() {
   const { data: documents } = useSpecifications(countryCode ?? '');
   const spec = documents?.find((d) => d.document_type === documentType);
   const specLine = spec
-    ? [photoSize(spec), spec.background_color?.replace(/_/g, ' ')].filter(Boolean).join(' · ')
+    ? [formatDimensions(spec), spec.background_color?.replace(/_/g, ' ')].filter(Boolean).join(' · ')
     : 'Country and document type';
 
   const retentionHours = config?.retention_hours;

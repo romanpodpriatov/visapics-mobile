@@ -1,0 +1,122 @@
+{
+  "un/University of Bristol UCard 390x520 px": {
+    "country_code": "un",
+    "country_name": "United Nations",
+    "dimensions": {
+      "dpi": 300,
+      "height_mm": 44.027,
+      "width_mm": 33.02
+    },
+    "document_type": "University of Bristol UCard 390x520 px",
+    "id": 939,
+    "is_reviewed": false,
+    "notes": null,
+    "official_source": [
+      "https://www.gov.uk/photos-for-passports"
+    ],
+    "requirements": {
+      "background_color": "off-white",
+      "eyes_position_from_bottom_mm": null,
+      "eyes_position_max_from_bottom_mm": null,
+      "file_size_max_kb": 10000,
+      "file_size_min_kb": 50,
+      "glasses_allowed": "yes",
+      "head_height_max_mm": null,
+      "head_height_max_percent": null,
+      "head_height_min_mm": null,
+      "head_height_min_percent": null,
+      "neutral_expression_required": true
+    },
+    "spec_updated_at": "2025-12-05T14:15:44.254371"
+  },
+  "ca/Canada Passport 5x7 cm (715x1000 - 2000x2800)": {
+    "country_code": "ca",
+    "country_name": "Canada",
+    "dimensions": {
+      "dpi": 600,
+      "height_mm": 70.0,
+      "width_mm": 50.0
+    },
+    "document_type": "Canada Passport 5x7 cm (715x1000 - 2000x2800)",
+    "id": 121,
+    "is_reviewed": true,
+    "notes": null,
+    "official_source": [
+      "https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports/photos.html"
+    ],
+    "requirements": {
+      "background_color": "white",
+      "eyes_position_from_bottom_mm": null,
+      "eyes_position_max_from_bottom_mm": null,
+      "file_size_max_kb": 4096,
+      "file_size_min_kb": 0,
+      "glasses_allowed": "yes",
+      "head_height_max_mm": 36.0,
+      "head_height_max_percent": 0.8,
+      "head_height_min_mm": 31.0,
+      "head_height_min_percent": 0.7,
+      "neutral_expression_required": true
+    },
+    "spec_updated_at": "2025-07-07T05:14:58.895179"
+  },
+  "ae/Emirates ID / residence visa for UAE ICA": {
+    "country_code": "ae",
+    "country_name": "United Arab Emirates",
+    "dimensions": {
+      "dpi": 600,
+      "height_mm": 45.0,
+      "width_mm": 35.0
+    },
+    "document_type": "Emirates ID / residence visa for UAE ICA",
+    "id": 794,
+    "is_reviewed": true,
+    "notes": null,
+    "official_source": [
+      "https://www.ica.gov.ae"
+    ],
+    "requirements": {
+      "background_color": "white",
+      "eyes_position_from_bottom_mm": null,
+      "eyes_position_max_from_bottom_mm": null,
+      "file_size_max_kb": null,
+      "file_size_min_kb": null,
+      "glasses_allowed": "no",
+      "head_height_max_mm": 35.0,
+      "head_height_max_percent": 0.8,
+      "head_height_min_mm": 31.0,
+      "head_height_min_percent": 0.7,
+      "neutral_expression_required": true
+    },
+    "spec_updated_at": "2025-12-05T14:15:41.451938"
+  },
+  "gb/UK Passport online": {
+    "country_code": "gb",
+    "country_name": "United Kingdom",
+    "dimensions": {
+      "dpi": 300,
+      "height_mm": 63.5,
+      "width_mm": 50.8
+    },
+    "document_type": "UK Passport online",
+    "id": 802,
+    "is_reviewed": true,
+    "notes": null,
+    "official_source": [
+      "https://www.gov.uk/"
+    ],
+    "requirements": {
+      "background_color": "light_grey",
+      "eyes_position_from_bottom_mm": null,
+      "eyes_position_max_from_bottom_mm": null,
+      "file_size_max_kb": 10000,
+      "file_size_min_kb": 50,
+      "glasses_allowed": "yes",
+      "head_height_max_mm": null,
+      "head_height_max_percent": 0.55,
+      "head_height_min_mm": null,
+      "head_height_min_percent": 0.55,
+      "neutral_expression_required": true
+    },
+    "spec_updated_at": "2025-12-05T14:15:42.501839"
+  }
+}
