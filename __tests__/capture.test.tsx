@@ -3,7 +3,7 @@ import { act, fireEvent, screen } from '@testing-library/react-native';
 import Capture from '../app/capture';
 import { readFrameStats } from '../src/capture/frameStats';
 import { useDraftStore } from '../src/store/draft';
-import { renderScreen } from '../src/test-utils';
+import { configFixture, renderScreen } from '../src/test-utils';
 
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
@@ -115,7 +115,10 @@ const ukPassport = {
   file_size_max_kb: null,
 };
 
-const seeds: [string[], unknown][] = [[['specifications', 'gb'], [ukPassport]]];
+const seeds: [string[], unknown][] = [
+  [['specifications', 'gb'], [ukPassport]],
+  [['config'], configFixture],
+];
 
 const goodFace = {
   bounds: { x: 340, y: 480, width: 400, height: 520 },
@@ -204,10 +207,25 @@ describe('capture', () => {
   });
 
   it('does not claim the light was checked before a frame was read', () => {
+    // Exposure, shadows and background all need pixels. Saying "not measured"
+    // is honest; showing them as passed would be a claim about a government
+    // document that nothing had verified.
     renderScreen(<Capture />, seeds);
     see([goodFace]);
 
-    expect(screen.getAllByText('Not measured')).toHaveLength(2);
+    expect(screen.getAllByText('Not measured')).toHaveLength(3);
+  });
+
+  it('judges the face by the server\u2019s own limits, under the server\u2019s names', () => {
+    // Not four rules of our own. The photo that prompted this was refused for
+    // a 5.6 degree roll against a gate that passes at 2, while the app was not
+    // looking at roll at all.
+    renderScreen(<Capture />, seeds);
+    see([{ ...goodFace, rollAngle: 5.6 }]);
+
+    expect(screen.getByText('Head straight')).toBeTruthy();
+    expect(screen.getByLabelText('Take photo').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText('Hold your head straight')).toBeTruthy();
   });
 });
 

@@ -28,8 +28,8 @@ import {
 import type { Face } from 'react-native-vision-camera-face-detector';
 import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
 
-import { useSpecifications } from '../src/api/hooks';
-import { GUIDE_WIDTH_SHARE, type CaptureSpec, type FrameStats } from '../src/capture/checks';
+import { useConfig, useSpecifications } from '../src/api/hooks';
+import { GUIDE_WIDTH_SHARE, type FrameStats } from '../src/capture/gate';
 import { readFrameStats } from '../src/capture/frameStats';
 import { useStableFaceOutput } from '../src/capture/faceOutput';
 import { type SessionFacts, describeSession } from '../src/capture/session';
@@ -37,22 +37,6 @@ import { shouldSample } from '../src/capture/throttle';
 import { useCoaching } from '../src/capture/useCoaching';
 import { useDraftStore } from '../src/store/draft';
 import { theme } from '../src/theme';
-
-const CHECK_LABELS = {
-  centre: 'Centring',
-  head: 'Head size',
-  light: 'Lighting',
-  background: 'Background',
-} as const;
-
-const CHECK_VALUES = {
-  centre: { pass: 'Centred', pending: 'Off centre' },
-  head: { pass: 'In range', pending: 'Not yet' },
-  light: { pass: 'Even', pending: 'Uneven' },
-  background: { pass: 'Uniform', pending: 'Busy' },
-} as const;
-
-type CheckKey = keyof typeof CHECK_LABELS;
 
 export default function Capture() {
   const router = useRouter();
@@ -64,18 +48,10 @@ export default function Capture() {
   const { data: documents } = useSpecifications(countryCode ?? '');
   const summary = documents?.find((d) => d.document_type === documentType);
 
-  const spec: CaptureSpec | null = summary
-    ? {
-        photo_width_mm: summary.photo_width_mm,
-        photo_height_mm: summary.photo_height_mm,
-        head_height_min_mm: summary.head_height_min_mm,
-        head_height_max_mm: summary.head_height_max_mm,
-        head_height_min_percent: summary.head_height_min_percent,
-        head_height_max_percent: summary.head_height_max_percent,
-      }
-    : null;
-
-  const { state, measured, onFaces, onStats } = useCoaching(spec);
+  // The server's own limits, never numbers of our own: the shutter has to arm
+  // exactly when the pipeline's quality gate would pass the same face.
+  const { data: config } = useConfig();
+  const { state, onFaces, onStats } = useCoaching(config?.quality ?? null);
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
@@ -224,11 +200,16 @@ export default function Capture() {
   }, [countdown, state.ready, capture]);
 
   const guideWidth = width * GUIDE_WIDTH_SHARE;
-  const guideHeight = spec
-    ? guideWidth * (spec.photo_height_mm / spec.photo_width_mm)
+  // The guide takes its shape from the document, so the person frames for the
+  // photo they are actually making. What decides is the gate, not the box.
+  const guideHeight = summary
+    ? guideWidth * (summary.photo_height_mm / summary.photo_width_mm)
     : guideWidth * 1.29;
 
-  const passing = (Object.keys(CHECK_LABELS) as CheckKey[]).filter((key) => state.checks[key]);
+  // Only what could be judged counts: a check the frame could not measure is
+  // neither a pass to boast about nor a failure to blame.
+  const judged = state.checks.filter((check) => check.status !== 'unmeasured');
+  const passing = judged.filter((check) => check.status === 'pass');
 
   return (
     <View style={styles.screen}>
@@ -305,22 +286,18 @@ export default function Capture() {
       </View>
 
       <View style={[styles.checks, { bottom: insets.bottom + 150 }]} pointerEvents="none">
-        {(Object.keys(CHECK_LABELS) as CheckKey[]).map((key) => {
-          const passed = state.checks[key];
-          const unmeasured = !measured && (key === 'light' || key === 'background');
+        {state.checks.map((check) => {
+          const passed = check.status === 'pass';
+          const failed = check.status === 'fail';
           return (
-            <View key={key} style={[styles.check, passed && styles.checkPassed]}>
+            <View key={check.key} style={[styles.check, passed && styles.checkPassed]}>
               <Text style={[styles.checkGlyph, passed ? styles.glyphPassed : styles.glyphPending]}>
-                {passed ? '✓' : '!'}
+                {passed ? '\u2713' : failed ? '!' : '\u00b7'}
               </Text>
               <View style={styles.checkText}>
-                <Text style={styles.checkLabel}>{CHECK_LABELS[key]}</Text>
+                <Text style={styles.checkLabel}>{check.label}</Text>
                 <Text style={[styles.checkValue, passed && styles.checkValuePassed]}>
-                  {unmeasured
-                    ? 'Not measured'
-                    : passed
-                      ? CHECK_VALUES[key].pass
-                      : CHECK_VALUES[key].pending}
+                  {passed ? 'OK' : failed ? 'Fix this' : 'Not measured'}
                 </Text>
               </View>
             </View>
@@ -353,7 +330,9 @@ export default function Capture() {
           </View>
         </Pressable>
         <View style={styles.bottomSlot}>
-          <Text style={styles.counter}>{passing.length}/4</Text>
+          <Text style={styles.counter}>
+            {passing.length}/{judged.length}
+          </Text>
           <Text style={styles.counterCaption}>checks</Text>
         </View>
       </View>

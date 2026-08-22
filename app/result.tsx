@@ -27,7 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError, SITE_BASE } from '../src/api/client';
 import { useConfig } from '../src/api/hooks';
 import { saveToVault } from '../src/api/vault';
-import type { UnlockResult } from '../src/api/types';
+import type { QualityReport, UnlockResult } from '../src/api/types';
 import { Button, Card, ComplianceRow, Paywall } from '../src/components';
 import { restorePurchases } from '../src/iap';
 import { downloadToCache, saveToFiles, saveToPhotos } from '../src/photo/download';
@@ -67,6 +67,11 @@ export default function Result() {
    * ruled, and polling for the same answer every second and a half.
    */
   const rejected = status.error instanceof ApiError ? status.error : null;
+  /** The gate's own thirteen-check report, when it was the gate that refused. */
+  const quality =
+    rejected && typeof rejected.data === 'object' && rejected.data !== null
+      ? ((rejected.data as { quality?: QualityReport }).quality ?? null)
+      : null;
   const rejectedDetail =
     rejected && typeof rejected.data === 'object' && rejected.data !== null
       ? String((rejected.data as { details?: unknown }).details ?? '')
@@ -194,8 +199,37 @@ export default function Result() {
 
       {rejected ? (
         <Card style={[styles.photoCard, shadow.subtle]}>
-          <Text style={styles.rejected}>{rejected.message}</Text>
+          <Text style={styles.rejected}>{quality?.message ?? rejected.message}</Text>
           {rejectedDetail ? <Text style={styles.rejectedDetail}>{rejectedDetail}</Text> : null}
+
+          {quality?.issues.map((issue) => (
+            <Text key={issue.type} style={styles.rejectedDetail}>
+              {issue.message}
+            </Text>
+          ))}
+
+          {quality?.checks.length ? (
+            <View style={styles.qualityList}>
+              {quality.checks.map((check) => (
+                <View key={check.key} style={styles.qualityRow}>
+                  <Text
+                    style={[
+                      styles.qualityGlyph,
+                      check.status === 'pass'
+                        ? styles.qualityPass
+                        : check.status === 'warn'
+                          ? styles.qualityWarn
+                          : styles.qualityFail,
+                    ]}
+                  >
+                    {check.status === 'pass' ? '\u2713' : check.status === 'warn' ? '!' : '\u2715'}
+                  </Text>
+                  <Text style={styles.qualityLabel}>{check.label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           <Button label="Take a new photo" onPress={() => router.replace('/photos')} />
         </Card>
       ) : null}
@@ -361,6 +395,24 @@ export default function Result() {
 }
 
 const styles = StyleSheet.create({
+  qualityList: { marginBottom: theme.space.lg, gap: 7 },
+  qualityRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  qualityGlyph: {
+    width: 16,
+    height: 16,
+    borderRadius: 9,
+    textAlign: 'center',
+    lineHeight: 16,
+    fontSize: 9,
+    color: '#FFFFFF',
+    fontFamily: theme.type.bodySemiBold,
+    overflow: 'hidden',
+  },
+  qualityPass: { backgroundColor: theme.color.success },
+  qualityWarn: { backgroundColor: theme.color.warning },
+  qualityFail: { backgroundColor: theme.color.danger },
+  qualityLabel: { fontFamily: theme.type.body, fontSize: 13, color: theme.color.text },
+
   rejected: {
     fontFamily: theme.type.bodyMedium,
     fontSize: 15,

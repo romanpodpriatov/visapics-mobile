@@ -346,3 +346,60 @@ describe('a photo the pipeline refused', () => {
     expect(await screen.findByText(/300x400 pixels/)).toBeTruthy();
   });
 });
+
+describe('the quality gate report', () => {
+  beforeEach(() => {
+    useDraftStore.setState({
+      countryCode: 'gb',
+      documentType: 'UK Passport offline 35x45 mm',
+      taskId: 'task-1',
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  /** Exactly what /photo/status now sends for a refused photo. */
+  const QUALITY = {
+    primary_issue: 'STRONG_SHADOW_LEFT',
+    message: "There's a strong shadow on the left side of your face. Please adjust your lighting.",
+    checks: [
+      { key: 'face_detection', label: 'Face detected', status: 'pass' },
+      { key: 'pose', label: 'Head straight', status: 'fail' },
+      { key: 'shadows', label: 'Even lighting', status: 'fail' },
+      { key: 'background', label: 'Background', status: 'warn' },
+    ],
+    issues: [
+      { type: 'POSE_ROLL_LEFT', status: 'fail', message: 'Your head is tilted. Straighten it.' },
+    ],
+  };
+
+  const refuseWithGate = () =>
+    jest.spyOn(api, 'get').mockImplementation(((path: string) =>
+      path.startsWith('/photo/status')
+        ? Promise.reject(
+            new ApiError(QUALITY.message, 400, 'E400_QUALITY', { quality: QUALITY }),
+          )
+        : Promise.resolve({})) as never);
+
+  it('shows every check the gate ran, not just the sentence', async () => {
+    refuseWithGate();
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText('Head straight')).toBeTruthy();
+    expect(screen.getByText('Even lighting')).toBeTruthy();
+    expect(screen.getByText('Face detected')).toBeTruthy();
+  });
+
+  it('leads with the sentence the gate wrote', async () => {
+    refuseWithGate();
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText(QUALITY.message)).toBeTruthy();
+  });
+
+  it('spells out each issue in the gate’s own words', async () => {
+    refuseWithGate();
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText('Your head is tilted. Straighten it.')).toBeTruthy();
+  });
+});

@@ -13,7 +13,7 @@
  */
 import type { Frame } from 'react-native-vision-camera';
 
-import type { FrameStats } from './checks';
+import type { FrameStats } from './gate';
 
 /** Roughly this many samples per frame, spread over a grid. */
 const SAMPLE_TARGET = 24;

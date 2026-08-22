@@ -1,3 +1,5 @@
+import type { QualityLimits } from '../capture/gate';
+
 /**
  * The shapes the server actually returns.
  *
@@ -39,6 +41,33 @@ export type Config = {
   /** How long a photo is kept. The consent screen renders this, never a constant. */
   retention_hours: number;
   legal: Legal;
+  /**
+   * The limits the server's quality gate judges by. The live gate arms the
+   * shutter on these and on nothing of its own, so both ends reach the same
+   * verdict about the same face.
+   */
+  quality: QualityLimits;
+};
+
+/** One entry of the quality gate's report, as /photo/status sends it. */
+export type QualityCheck = {
+  key: string;
+  label: string;
+  status: 'pass' | 'warn' | 'fail';
+};
+
+export type QualityIssue = {
+  type: string;
+  status: 'warn' | 'fail';
+  message: string;
+};
+
+/** What comes back in error.quality when the gate refused the photo. */
+export type QualityReport = {
+  primary_issue: string | null;
+  message: string;
+  checks: QualityCheck[];
+  issues: QualityIssue[];
 };
 
 // ── POST /auth/device, POST /auth/apple ────────────────────────────────────

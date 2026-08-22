@@ -61,6 +61,19 @@ export const configFixture = {
   ],
   coverage: { countries: 164, specifications: 951, with_official_source: 951 },
   retention_hours: 168,
+  // Exactly what /api/v1/config serves, which is the pipeline's own
+  // QualityThresholds — the app holds no numbers of its own.
+  quality: {
+    pose_roll_max_deg: 2,
+    pose_yaw_max_deg: 5,
+    pose_pitch_max_deg: 5,
+    face_area_ratio_min: 0.05,
+    head_margin_ratio_min: 0.03,
+    exposure_median_min: 80,
+    exposure_median_max: 180,
+    shadow_diff_max: 25,
+    background_std_max: 30,
+  },
   legal: {
     disclaimer:
       'VisaPics is an independent service. It is not affiliated with, endorsed by, or acting on behalf of any government agency.',
