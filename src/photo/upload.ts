@@ -76,7 +76,13 @@ export function processingParts(
   request: ProcessingRequest,
 ): [string, unknown][] {
   return [
-    ['photo', { uri: photoUri, name: 'photo.jpg', type: 'image/jpeg' }],
+    // A File, not React Native's {uri, name, type} part. Expo's fetch builds
+    // the multipart body in JavaScript and takes a string, a Blob, or an
+    // object with bytes(); handed a uri part it throws "Unsupported
+    // FormDataPart implementation" and the request never leaves the phone.
+    // expo-file-system's File implements Blob, and carries the name the
+    // server needs to keep the upload.
+    ['photo', new File(photoUri)],
     ['country_code', request.countryCode],
     ['document_type', request.documentType],
     ['remove_background', String(request.removeBackground)],

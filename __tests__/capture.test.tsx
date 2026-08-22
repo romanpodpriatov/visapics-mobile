@@ -32,15 +32,34 @@ let frameOptions: {
   targetResolution?: { width: number; height: number };
 } | null = null;
 
+/** The props the screen handed the camera, and its photo output options. */
+let cameraProps: {
+  onError?: (error: Error) => void;
+  onSessionConfigSelected?: (config: unknown) => void;
+} | null = null;
+let photoOptions: {
+  qualityPrioritization?: string;
+  targetResolution?: { width: number; height: number };
+} | null = null;
+
 jest.mock('react-native-vision-camera', () => ({
-  Camera: 'Camera',
+  Camera: (props: never) => {
+    cameraProps = props;
+    return null;
+  },
   useCameraDevice: () => ({ id: 'front' }),
-  usePhotoOutput: () => ({ capturePhoto: mockCapturePhoto }),
+  usePhotoOutput: (options: never) => {
+    photoOptions = options;
+    return { capturePhoto: mockCapturePhoto };
+  },
   useFrameOutput: (options: never) => {
     frameOptions = options;
     return {};
   },
-  CommonResolutions: { VGA_4_3: { width: 480, height: 640 } },
+  CommonResolutions: {
+    VGA_4_3: { width: 480, height: 640 },
+    FHD_4_3: { width: 1440, height: 1920 },
+  },
 }));
 
 jest.mock('../src/capture/frameStats', () => ({
@@ -236,5 +255,53 @@ describe('the frame pipeline', () => {
 
     expect(dispose).toHaveBeenCalledTimes(20);
     expect(jest.mocked(readFrameStats)).toHaveBeenCalledTimes(10);
+  });
+});
+
+describe('the camera session', () => {
+  const render = () => {
+    useDraftStore.setState({ countryCode: 'gb', documentType: 'UK Passport 35x45 mm' });
+    renderScreen(<Capture />, seeds);
+  };
+
+  beforeEach(() => {
+    cameraProps = null;
+    photoOptions = null;
+  });
+
+  it('does not ask the sensor for its largest photo', () => {
+    // Asking for the maximum makes the session negotiate a full-resolution
+    // non-binned readout, which VisionCamera documents as worse in low light
+    // and heavier on bandwidth — a dark, stuttering preview on a real iPhone.
+    // 1440×1920 is far above the 992×1275 the server needs.
+    render();
+
+    expect(photoOptions?.targetResolution).toEqual({ width: 1440, height: 1920 });
+    expect(photoOptions?.qualityPrioritization).not.toBe('quality');
+  });
+
+  it('reports what the camera settled on, so a dark preview can be diagnosed', () => {
+    render();
+
+    act(() =>
+      cameraProps?.onSessionConfigSelected?.({
+        isBinned: false,
+        selectedFPS: 30,
+        nativePixelFormat: 'yuv',
+      }),
+    );
+
+    expect(screen.getByText('full-res · 30fps · yuv')).toBeTruthy();
+  });
+
+  it('shows a camera failure instead of a preview that quietly stops', () => {
+    // Nothing was listening to onError, so a session that refused to
+    // reconfigure — flipping to the back camera, for one — looked like a
+    // frozen screen with nothing to report.
+    render();
+
+    act(() => cameraProps?.onError?.(new Error('Camera device is unavailable')));
+
+    expect(screen.getByText('Camera device is unavailable')).toBeTruthy();
   });
 });

@@ -23,6 +23,15 @@ jest.mock('expo-file-system', () => ({
     get size() {
       return mockFiles[this.uri]?.size ?? null;
     }
+    get name() {
+      return this.uri.split('/').pop() ?? '';
+    }
+    get type() {
+      return 'image/jpeg';
+    }
+    async bytes() {
+      return new Uint8Array(mockFiles[this.uri]?.size ?? 0);
+    }
   },
 }));
 
@@ -176,5 +185,34 @@ describe('uploadErrorMessage', () => {
 
   it('still says something when the failure carries no message', () => {
     expect(uploadErrorMessage(undefined)).toBeTruthy();
+  });
+});
+
+describe('the multipart part itself', () => {
+  beforeEach(() => {
+    mockFiles['file:///photo.jpg'] = { exists: true, size: 120_000 };
+  });
+
+  it('is something Expo\'s fetch can encode', () => {
+    // This is the bug the device found. Expo's fetch builds the multipart
+    // body in JavaScript and accepts a string, a Blob, or an object with
+    // bytes(). React Native's {uri, name, type} part is none of those: its
+    // converter throws "Unsupported FormDataPart implementation", so the
+    // request never left the phone — which is exactly what production's
+    // access log showed.
+    const sent = Object.fromEntries(
+      processingParts('file:///photo.jpg', {
+        countryCode: 'gb',
+        documentType: 'UK Passport 35x45 mm',
+        removeBackground: true,
+        enhance: false,
+      }),
+    );
+    const photo = sent.photo as { bytes?: unknown; name?: unknown; type?: unknown };
+
+    expect(typeof photo.bytes).toBe('function');
+    // The server keeps the upload only if the part is named.
+    expect(photo.name).toBeTruthy();
+    expect(photo.type).toBe('image/jpeg');
   });
 });

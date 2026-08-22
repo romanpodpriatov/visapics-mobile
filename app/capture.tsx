@@ -31,6 +31,7 @@ import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
 import { useSpecifications } from '../src/api/hooks';
 import { GUIDE_WIDTH_SHARE, type CaptureSpec, type FrameStats } from '../src/capture/checks';
 import { readFrameStats } from '../src/capture/frameStats';
+import { describeSession } from '../src/capture/session';
 import { shouldSample } from '../src/capture/throttle';
 import { useCoaching } from '../src/capture/useCoaching';
 import { useDraftStore } from '../src/store/draft';
@@ -79,7 +80,22 @@ export default function Capture() {
   const [flash, setFlash] = useState(false);
   const device = useCameraDevice(facing);
 
-  const photoOutput = usePhotoOutput({ qualityPrioritization: 'quality' });
+  /**
+   * Bounded on purpose. Asking for the sensor's largest photo makes the
+   * session negotiate a full-resolution, non-binned readout — and VisionCamera
+   * says what that costs: binning "improves low-light sensitivity" and binned
+   * formats "use significantly less bandwidth". A physical iPhone showed both
+   * halves of that bill, a preview dark enough to need direct light and slow
+   * with it. The server needs 992×1275 px at minimum; this is well past it.
+   */
+  const photoOutput = usePhotoOutput({
+    targetResolution: CommonResolutions.FHD_4_3,
+    qualityPrioritization: 'balanced',
+  });
+
+  /** What the session settled on, and anything it refused to do. */
+  const [sessionFacts, setSessionFacts] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const handleFaces = useCallback(
     (faces: Face[]) => {
@@ -199,6 +215,10 @@ export default function Capture() {
           device={device}
           isActive
           outputs={[photoOutput, faceOutput, frameOutput]}
+          onSessionConfigSelected={(config) => setSessionFacts(describeSession(config))}
+          // Nothing was listening here, so a session that refused to
+          // reconfigure looked like a frozen preview with nothing to say.
+          onError={(error: Error) => setCameraError(error.message)}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.noDevice]}>
@@ -236,6 +256,12 @@ export default function Capture() {
         </Pressable>
       </View>
 
+      {cameraError ? (
+        <View style={styles.cameraError} pointerEvents="none">
+          <Text style={styles.cameraErrorText}>{cameraError}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.hintRow} pointerEvents="none">
         <View style={styles.hintPill}>
           <View style={[styles.hintDot, state.ready && styles.hintDotReady]} />
@@ -266,6 +292,12 @@ export default function Capture() {
           );
         })}
       </View>
+
+      {sessionFacts ? (
+        <Text style={[styles.sessionFacts, { bottom: insets.bottom + 130 }]} pointerEvents="none">
+          {sessionFacts}
+        </Text>
+      ) : null}
 
       <View style={[styles.bottomBar, { bottom: insets.bottom + 44 }]}>
         <View style={styles.bottomSlot} />
@@ -359,6 +391,30 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: '#FFFFFF',
     marginTop: 3,
+  },
+
+  cameraError: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: '46%',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: 'rgba(153,27,27,.92)',
+  },
+  cameraErrorText: { fontFamily: theme.type.bodyMedium, fontSize: 13, color: '#FFFFFF' },
+
+  /** Diagnostic, while the capture stack is being proven on hardware. */
+  sessionFacts: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontFamily: theme.type.mono,
+    fontSize: 9.5,
+    letterSpacing: 0.6,
+    color: 'rgba(255,255,255,.45)',
   },
 
   hintRow: { position: 'absolute', left: 0, right: 0, top: '58%', alignItems: 'center' },
