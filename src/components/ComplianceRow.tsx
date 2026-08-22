@@ -3,6 +3,10 @@
  *
  * The measured value and the document's own tolerance sit side by side,
  * because "Head height 31.5 mm" means nothing without "29–34 mm" beside it.
+ *
+ * Where the server has the same fact in a second unit it goes underneath, in
+ * smaller type: a photo size belongs in the millimetres the document states,
+ * with the pixels available but not shouting.
  */
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -20,11 +24,14 @@ export function ComplianceRow({ check }: { check: ComplianceCheck }) {
       <Text style={styles.label} numberOfLines={1}>
         {check.label}
       </Text>
-      <Text style={[styles.value, failed && styles.valueFail]}>
-        {failed
-          ? `${check.measured_display} / ${check.requirement_display}`
-          : check.measured_display}
-      </Text>
+      <View style={styles.values}>
+        <Text style={[styles.value, failed && styles.valueFail]}>
+          {failed
+            ? `${check.measured_display} / ${check.requirement_display}`
+            : check.measured_display}
+        </Text>
+        {check.detail ? <Text style={styles.detail}>{check.detail}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -53,6 +60,14 @@ const styles = StyleSheet.create({
   glyphPass: { backgroundColor: theme.color.success },
   glyphFail: { backgroundColor: theme.color.danger },
   label: { flex: 1, fontFamily: theme.type.body, fontSize: 13.5, color: theme.color.text },
+  values: { alignItems: 'flex-end' },
+  detail: {
+    fontFamily: theme.type.mono,
+    fontSize: 8.5,
+    letterSpacing: 0.4,
+    color: theme.color.faint,
+    marginTop: 2,
+  },
   value: {
     fontFamily: theme.type.mono,
     fontSize: 10,

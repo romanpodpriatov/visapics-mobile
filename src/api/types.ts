@@ -156,6 +156,8 @@ export type ComplianceCheck = {
   measured: number | string | [number, number] | null;
   measured_display: string;
   requirement_display: string;
+  /** The same fact in another unit — pixels, under a size stated in millimetres. */
+  detail?: string | null;
   verdict: CheckVerdict;
 };
 
