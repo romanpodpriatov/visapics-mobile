@@ -119,3 +119,44 @@ describe('Paywall', () => {
     expect(screen.queryByText(/cheaper|website|web/i)).toBeNull();
   });
 });
+
+describe('when the store answers with nothing', () => {
+  // Seen on a real device: products not attached to a build, no sandbox
+  // account, and StoreKit returns an empty list. The button then said
+  // "Prices are loading" and stayed dead for ever — a lie plus a dead end.
+  const settledEmpty = (): [string[], unknown][] => [
+    [['config'], configFixture],
+    [['iap-products'], []],
+  ];
+
+  const openEmpty = (onRestore = jest.fn()) =>
+    renderScreen(
+      <Paywall visible onClose={jest.fn()} onPurchased={jest.fn()} onRestore={onRestore} />,
+      settledEmpty(),
+    );
+
+  it('stops claiming the prices are still loading', () => {
+    openEmpty();
+
+    expect(screen.queryByText('Prices are loading from the App Store')).toBeNull();
+  });
+
+  it('says the store did not answer, and offers to ask again', async () => {
+    jest.mocked(fetchIapProducts).mockResolvedValue([]);
+    openEmpty();
+
+    const retry = screen.getByText('Try again');
+    fireEvent.press(retry);
+
+    await waitFor(() => expect(fetchIapProducts).toHaveBeenCalled());
+  });
+
+  it('still offers Restore Purchases, which does not need the catalogue', () => {
+    const onRestore = jest.fn();
+    openEmpty(onRestore);
+
+    fireEvent.press(screen.getByText('Restore purchases'));
+
+    expect(onRestore).toHaveBeenCalled();
+  });
+});

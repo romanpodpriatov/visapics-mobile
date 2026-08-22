@@ -31,7 +31,7 @@ import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
 import { useSpecifications } from '../src/api/hooks';
 import { GUIDE_WIDTH_SHARE, type CaptureSpec, type FrameStats } from '../src/capture/checks';
 import { readFrameStats } from '../src/capture/frameStats';
-import { describeSession } from '../src/capture/session';
+import { type SessionFacts, describeSession } from '../src/capture/session';
 import { shouldSample } from '../src/capture/throttle';
 import { useCoaching } from '../src/capture/useCoaching';
 import { useDraftStore } from '../src/store/draft';
@@ -94,8 +94,10 @@ export default function Capture() {
   });
 
   /** What the session settled on, and anything it refused to do. */
-  const [sessionFacts, setSessionFacts] = useState<string | null>(null);
+  const [session, setSession] = useState<SessionFacts | null>(null);
+  const [dropped, setDropped] = useState(0);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const noteDrop = useCallback(() => setDropped((seen) => seen + 1), []);
 
   const handleFaces = useCallback(
     (faces: Face[]) => {
@@ -157,6 +159,7 @@ export default function Capture() {
       frame.dispose();
       scheduleOnRN(handleStats, stats);
     },
+    onFrameDropped: noteDrop,
   });
 
   const wasReady = useRef(false);
@@ -215,7 +218,19 @@ export default function Capture() {
           device={device}
           isActive
           outputs={[photoOutput, faceOutput, frameOutput]}
-          onSessionConfigSelected={(config) => setSessionFacts(describeSession(config))}
+          /**
+           * Said where the session negotiates it, rather than hoped for from
+           * the outputs' side. Binning is VisionCamera's own answer to both
+           * complaints at once — it "improves low-light sensitivity" and uses
+           * "significantly less bandwidth" — and the frame rate is capped
+           * because a 60fps session allows no exposure longer than 1/60s,
+           * which is half the light of a 30fps one. That is the ordinary
+           * reason a preview looks dark indoors while the stock camera does
+           * not. Order matters: constraints are negotiated in turn, so light
+           * comes before frame rate.
+           */
+          constraints={[{ binned: true }, { fps: 30 }]}
+          onSessionConfigSelected={setSession}
           // Nothing was listening here, so a session that refused to
           // reconfigure looked like a frozen preview with nothing to say.
           onError={(error: Error) => setCameraError(error.message)}
@@ -293,9 +308,9 @@ export default function Capture() {
         })}
       </View>
 
-      {sessionFacts ? (
+      {session ? (
         <Text style={[styles.sessionFacts, { bottom: insets.bottom + 130 }]} pointerEvents="none">
-          {sessionFacts}
+          {describeSession(session, dropped)}
         </Text>
       ) : null}
 

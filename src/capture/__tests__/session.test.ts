@@ -23,3 +23,19 @@ describe('describeSession', () => {
     );
   });
 });
+
+describe('describeSession with dropped frames', () => {
+  it('counts the frames the pipeline could not keep up with', () => {
+    // The number that decides whether the frame processor is the problem. A
+    // stalling pipeline drops frames; a healthy one does not.
+    expect(
+      describeSession({ isBinned: true, selectedFPS: 30, nativePixelFormat: 'yuv' }, 12),
+    ).toBe('binned · 30fps · yuv · 12 dropped');
+  });
+
+  it('says nothing about drops when there have been none', () => {
+    expect(
+      describeSession({ isBinned: true, selectedFPS: 30, nativePixelFormat: 'yuv' }, 0),
+    ).toBe('binned · 30fps · yuv');
+  });
+});

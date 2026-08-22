@@ -42,7 +42,7 @@ type Props = {
 
 export function Paywall({ visible, onClose, onPurchased, onRestore, restoring }: Props) {
   const { data: config } = useConfig();
-  const { data: products } = useIapProducts();
+  const { data: products, isPending, isFetching, refetch } = useIapProducts();
   const [selected, setSelected] = useState<ProductId>('org.visapics.app.photo.single');
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -50,6 +50,12 @@ export function Paywall({ visible, onClose, onPurchased, onRestore, restoring }:
   const priceOf = (id: ProductId) =>
     products?.find((product) => product.id === id)?.displayPrice ?? null;
   const selectedPrice = priceOf(selected);
+
+  // An empty answer is an answer. StoreKit returns nothing when the products
+  // are not attached to the build, or when nobody is signed into a sandbox
+  // account — and a button that says "loading" for ever is both a lie and a
+  // dead end. Asking again is cheap and sometimes works.
+  const storeAnsweredNothing = !isPending && !selectedPrice;
 
   const buy = async () => {
     setBusy(true);
@@ -105,12 +111,23 @@ export function Paywall({ visible, onClose, onPurchased, onRestore, restoring }:
         })}
       </View>
 
-      <Button
-        label={selectedPrice ? `Buy ${selectedPrice}` : 'Prices are loading from the App Store'}
-        onPress={() => void buy()}
-        disabled={!selectedPrice}
-        busy={busy}
-      />
+      {storeAnsweredNothing ? (
+        <>
+          <Button label="Try again" onPress={() => void refetch()} busy={isFetching} />
+          <Text style={styles.failed}>
+            The App Store did not send prices back. Check your connection and try again — your
+            existing credits still work, and Restore Purchases below does not need the store
+            catalogue.
+          </Text>
+        </>
+      ) : (
+        <Button
+          label={selectedPrice ? `Buy ${selectedPrice}` : 'Prices are loading from the App Store'}
+          onPress={() => void buy()}
+          disabled={!selectedPrice}
+          busy={busy}
+        />
+      )}
 
       {failed ? (
         <Text style={styles.failed}>

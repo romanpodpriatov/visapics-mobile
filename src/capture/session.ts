@@ -15,10 +15,14 @@ export type SessionFacts = {
   nativePixelFormat: string;
 };
 
-export function describeSession(config: SessionFacts): string {
-  return [
+export function describeSession(config: SessionFacts, dropped = 0): string {
+  const parts = [
     config.isBinned ? 'binned' : 'full-res',
     config.selectedFPS ? `${config.selectedFPS}fps` : 'default fps',
     config.nativePixelFormat,
-  ].join(' · ');
+  ];
+  // Drops are the number that decides whether the frame processor is at fault:
+  // a stalling pipeline drops frames, a healthy one does not.
+  if (dropped > 0) parts.push(`${dropped} dropped`);
+  return parts.join(' · ');
 }

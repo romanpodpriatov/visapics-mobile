@@ -36,6 +36,7 @@ let frameOptions: {
 let cameraProps: {
   onError?: (error: Error) => void;
   onSessionConfigSelected?: (config: unknown) => void;
+  constraints?: Record<string, unknown>[];
 } | null = null;
 let photoOptions: {
   qualityPrioritization?: string;
@@ -303,5 +304,17 @@ describe('the camera session', () => {
     act(() => cameraProps?.onError?.(new Error('Camera device is unavailable')));
 
     expect(screen.getByText('Camera device is unavailable')).toBeTruthy();
+  });
+
+  it('asks the session for a binned format and a capped frame rate', () => {
+    // Two fixes aimed at this from the outputs' side changed nothing on a real
+    // iPhone, so the intent is now stated where the session negotiates it.
+    // VisionCamera's own words for { binned: true }: "improves low-light
+    // sensitivity", "significantly less bandwidth". And a 60fps session caps
+    // every exposure at 1/60s, which is half the light of a 30fps one — the
+    // ordinary reason a preview is dark indoors while the stock camera is not.
+    render();
+
+    expect(cameraProps?.constraints).toEqual([{ binned: true }, { fps: 30 }]);
   });
 });
