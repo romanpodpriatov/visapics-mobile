@@ -1,20 +1,24 @@
 /**
- * Signing in.
+ * Signing in — with Apple, or with the account the website already has.
  *
- * Only Sign in with Apple is offered. The reference draws Google, Facebook and
- * an email form beside it, but none of those can carry a guest's credits onto
- * the account: /api/v1/auth/apple takes a device_token and merges, and the
- * site's own /auth/login and social callbacks do not — the email path even
- * routes 2FA through a Flask session and a web redirect. Offering a sign-in
- * that silently empties someone's balance would be worse than offering fewer.
+ * Both paths send the device token, because both have to: it is what moves a
+ * guest's credits onto the account. The site's own /auth/login takes no such
+ * thing, which is why email sign-in goes to /api/v1/auth/email instead — the
+ * same merge, and a two-step API for two-factor accounts rather than the
+ * website's Flask session and redirect to /account/2fa.
  *
- * It also settles Guideline 4.8 the simple way: the rule bites when an app
- * offers other third-party sign-in, and this one does not.
+ * Google and Facebook are still not offered. Guideline 4.8 bites when an app
+ * offers third-party sign-in, and an email form of one's own is not that.
  */
 import * as AppleAuthentication from 'expo-apple-authentication';
 
 import { api } from '../api/client';
-import type { DeviceRegistration } from '../api/types';
+import type {
+  DeviceRegistration,
+  EmailSignInResult,
+  SessionTokens,
+  UserSummary,
+} from '../api/types';
 import { getOrCreateDeviceToken, useAuthStore } from '../store/auth';
 
 function isCancellation(error: unknown): boolean {
@@ -53,4 +57,51 @@ export async function signInWithApple(): Promise<boolean> {
 
 export function appleSignInAvailable(): Promise<boolean> {
   return AppleAuthentication.isAvailableAsync();
+}
+
+
+/** What the first step of an email sign-in produced. */
+export type EmailSignIn =
+  | { status: 'signed-in' }
+  | { status: 'needs-2fa'; challengeToken: string };
+
+function needsSecondFactor(
+  result: EmailSignInResult,
+): result is { requires_2fa: true; challenge_token: string } {
+  return 'requires_2fa' in result && result.requires_2fa;
+}
+
+/**
+ * Sign in with an email and password.
+ *
+ * Throws an ApiError the caller can show: the server distinguishes a wrong
+ * password from an unverified address, a deactivated account and a locked one,
+ * and each of those needs a different thing from the person reading it.
+ */
+export async function signInWithEmail(email: string, password: string): Promise<EmailSignIn> {
+  const result = await api.post<EmailSignInResult>('/auth/email', {
+    email: email.trim(),
+    password,
+    device_token: await getOrCreateDeviceToken(),
+  });
+
+  if (needsSecondFactor(result)) {
+    return { status: 'needs-2fa', challengeToken: result.challenge_token };
+  }
+
+  useAuthStore.getState().setSession(result, result.user);
+  return { status: 'signed-in' };
+}
+
+/** Finish a sign-in that wanted a code. The challenge expires in five minutes. */
+export async function completeTwoFactor(challengeToken: string, code: string): Promise<void> {
+  const result = await api.post<SessionTokens & { user: UserSummary }>('/auth/email/2fa', {
+    challenge_token: challengeToken,
+    // Authenticator apps and backup codes are read off a screen and typed with
+    // spaces as often as not.
+    code: code.replace(/\s+/g, ''),
+    device_token: await getOrCreateDeviceToken(),
+  });
+
+  useAuthStore.getState().setSession(result, result.user);
 }

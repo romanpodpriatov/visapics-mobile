@@ -62,6 +62,15 @@ export type DeviceRegistration = SessionTokens & {
   created: boolean;
 };
 
+/**
+ * POST /auth/email — either a session, or a demand for the second factor.
+ * A 2FA account gets no tokens until the code is in: the challenge is a signed
+ * handoff, not a JWT, and is useless as a bearer token.
+ */
+export type EmailSignInResult =
+  | (SessionTokens & { user: UserSummary })
+  | { requires_2fa: true; challenge_token: string };
+
 // ── GET /countries, /specifications ────────────────────────────────────────
 
 export type Country = {

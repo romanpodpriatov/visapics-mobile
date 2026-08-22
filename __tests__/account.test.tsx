@@ -47,15 +47,16 @@ describe('account', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
-  it('offers Apple, and nothing that would empty the balance', async () => {
-    // Google, Facebook and the email form are in the reference; none of them
-    // can carry a guest's credits onto the account.
+  it('offers Apple and email, and nothing that would empty the balance', async () => {
+    // Google and Facebook are still absent: neither can carry a guest's
+    // credits onto the account, and 4.8 would then require Apple anyway.
+    // Email can, now that /api/v1/auth/email takes the device token.
     renderScreen(<Account />, seeds());
 
     await waitFor(() => expect(screen.UNSAFE_getAllByType('AppleAuthenticationButton' as never)));
+    expect(screen.getByText('Sign in with email')).toBeTruthy();
     expect(screen.queryByText(/Continue with Google/)).toBeNull();
     expect(screen.queryByText(/Continue with Facebook/)).toBeNull();
-    expect(screen.queryByText(/Password/)).toBeNull();
   });
 
   it('tells a guest how long this device keeps things, from the server', () => {
@@ -106,5 +107,23 @@ describe('account', () => {
   it('offers no sign-out to someone who never signed in', () => {
     renderScreen(<Account />, seeds());
     expect(screen.queryByText('Sign out')).toBeNull();
+  });
+});
+
+describe('a guest with an account on the website', () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    useAuthStore.setState({ userId: 1, isAnonymous: true, accessToken: 'a', refreshToken: 'r' });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('is offered the email sign-in, not only Apple', () => {
+    // Anyone holding a visapics.org account — and the credits on it — had no
+    // way to reach either from the phone.
+    renderScreen(<Account />, seeds());
+
+    fireEvent.press(screen.getByText('Sign in with email'));
+
+    expect(mockPush).toHaveBeenCalledWith('/signin');
   });
 });
