@@ -81,16 +81,6 @@ jest.mock('react-native-vision-camera-face-detector', () => ({
 
 jest.mock('react-native-worklets', () => ({
   scheduleOnRN: (fn: (arg: unknown) => void, arg: unknown) => fn(arg),
-  // A real box, so the throttle under test actually keeps its state.
-  createSynchronizable: (initial: unknown) => {
-    let held = initial;
-    return {
-      getDirty: () => held,
-      setBlocking: (next: unknown) => {
-        held = next;
-      },
-    };
-  },
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -262,21 +252,19 @@ describe('the frame pipeline', () => {
     expect(frameOptions?.pixelFormat).toBe('yuv');
   });
 
-  it('reads pixels ten times a second while releasing every frame', () => {
+  it('releases every frame it is handed', () => {
+    // The throttle that used to sit here was added to cure a stutter that
+    // turned out to be a non-binned session, and it was the only moving part
+    // between the camera and a worklet that never ran.
     render();
 
     const dispose = jest.fn();
-    let now = 1_000;
-    jest.spyOn(performance, 'now').mockImplementation(() => now);
-
-    // Twenty frames, 50ms apart: half a frame interval for a 100ms sample.
     for (let i = 0; i < 20; i += 1) {
       frameOptions?.onFrame({ isValid: true, hasPixelBuffer: true, dispose });
-      now += 50;
     }
 
     expect(dispose).toHaveBeenCalledTimes(20);
-    expect(jest.mocked(readFrameStats)).toHaveBeenCalledTimes(10);
+    expect(jest.mocked(readFrameStats)).toHaveBeenCalledTimes(20);
   });
 });
 

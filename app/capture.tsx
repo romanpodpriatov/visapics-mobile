@@ -26,14 +26,13 @@ import {
   usePhotoOutput,
 } from 'react-native-vision-camera';
 import type { Face } from 'react-native-vision-camera-face-detector';
-import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { useConfig, useSpecifications } from '../src/api/hooks';
 import { GUIDE_WIDTH_SHARE, type FrameStats } from '../src/capture/gate';
 import { readFrameStats } from '../src/capture/frameStats';
 import { useStableFaceOutput } from '../src/capture/faceOutput';
 import { type SessionFacts, describeFace, describeSession } from '../src/capture/session';
-import { shouldSample } from '../src/capture/throttle';
 import { useCoaching } from '../src/capture/useCoaching';
 import { useDraftStore } from '../src/store/draft';
 import { theme } from '../src/theme';
@@ -104,14 +103,6 @@ export default function Capture() {
 
   const handleStats = useCallback((stats: FrameStats | null) => onStats(stats), [onStats]);
 
-  /**
-   * When the pixels were last read. A frame's own timestamp is a CMTime on iOS
-   * and nanoseconds on Android, so the throttle uses performance.now() instead:
-   * monotonic milliseconds, and provably present in the worklet runtime — the
-   * worklets initializer calls it there itself.
-   */
-  const lastSampledAt = useMemo(() => createSynchronizable<number | null>(null), []);
-
   const frameOutput = useFrameOutput({
     // Small preview-sized YUV buffers rather than full-resolution ones.
     // Measured on a physical iPhone: at full resolution, downloading every
@@ -124,16 +115,13 @@ export default function Capture() {
     pixelFormat: 'yuv',
     // Let the preview come up first; statistics can start a moment later.
     allowDeferredStart: true,
+    // No throttle any more. It was added to cure a stutter that turned out to
+    // be a non-binned session, and it was the one moving part between the
+    // camera and a worklet that never ran: a Synchronizable captured into the
+    // frame callback. At VGA, preview-sized and with zero dropped frames,
+    // reading every frame costs little, and useCoaching samples at 10Hz.
     onFrame: (frame: Frame) => {
       'worklet';
-      const now = performance.now();
-      if (!shouldSample(now, lastSampledAt.getDirty())) {
-        // Nothing downstream can use this frame: release it and wait.
-        frame.dispose();
-        return;
-      }
-      lastSampledAt.setBlocking(now);
-
       const stats = readFrameStats(frame);
       // Read before disposing: afterwards the frame answers nothing.
       const reason = stats
