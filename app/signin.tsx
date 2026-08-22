@@ -141,13 +141,22 @@ export default function SignIn() {
           </Pressable>
         )}
 
+        {challenge ? null : (
+          <Pressable
+            onPress={() => router.push('/register')}
+            accessibilityRole="button"
+            hitSlop={10}
+          >
+            <Text style={styles.link}>Create an account</Text>
+          </Pressable>
+        )}
+
         <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
           <Text style={styles.link}>Not now</Text>
         </Pressable>
 
         <Text style={styles.note}>
-          No account yet? Create one at visapics.org and sign in here — or carry on as a guest;
-          photos and credits stay on this device either way.
+          Or carry on as a guest — photos and credits stay on this device either way.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

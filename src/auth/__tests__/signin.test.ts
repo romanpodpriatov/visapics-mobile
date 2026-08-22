@@ -2,7 +2,12 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 
 import { api } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
-import { completeTwoFactor, signInWithApple, signInWithEmail } from '../signin';
+import {
+  completeTwoFactor,
+  registerWithEmail,
+  signInWithApple,
+  signInWithEmail,
+} from '../signin';
 
 jest.mock('expo-apple-authentication', () => ({
   signInAsync: jest.fn(),
@@ -177,5 +182,31 @@ describe('completeTwoFactor', () => {
     await completeTwoFactor('challenge-1', '123456');
 
     expect((post.mock.calls[0][1] as { device_token?: string }).device_token).toBeTruthy();
+  });
+});
+
+describe('registerWithEmail', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('creates the account and reports the address it confirmed', async () => {
+    const post = jest
+      .spyOn(api, 'post')
+      .mockResolvedValue({ email: 'someone@example.com', verification_required: true } as never);
+
+    const result = await registerWithEmail('  Someone@Example.com ', 'Corr3ct-Horse');
+
+    expect(post.mock.calls[0][0]).toBe('/auth/register');
+    expect(post.mock.calls[0][1]).toMatchObject({ password: 'Corr3ct-Horse' });
+    expect(result.email).toBe('someone@example.com');
+  });
+
+  it('signs nobody in: the account is unverified until the emailed link is followed', async () => {
+    jest
+      .spyOn(api, 'post')
+      .mockResolvedValue({ email: 'someone@example.com', verification_required: true } as never);
+
+    await registerWithEmail('someone@example.com', 'Corr3ct-Horse');
+
+    expect(useAuthStore.getState().accessToken).toBeNull();
   });
 });

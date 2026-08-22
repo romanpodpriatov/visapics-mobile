@@ -7,8 +7,9 @@ import { completeTwoFactor, signInWithEmail } from '../src/auth/signin';
 import { configFixture, renderScreen } from '../src/test-utils';
 
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: mockBack }),
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: mockBack }),
 }));
 
 jest.mock('../src/auth/signin', () => ({
@@ -24,6 +25,7 @@ const type = (label: string, value: string) =>
 describe('sign in', () => {
   beforeEach(() => {
     mockBack.mockClear();
+    mockPush.mockClear();
     jest.mocked(signInWithEmail).mockReset().mockResolvedValue({ status: 'signed-in' });
     jest.mocked(completeTwoFactor).mockReset().mockResolvedValue(undefined);
   });
@@ -97,5 +99,13 @@ describe('sign in', () => {
 
     expect(open).toHaveBeenCalledWith('https://visapics.org/auth/forgot-password');
     open.mockRestore();
+  });
+
+  it('offers a way to create an account, for someone who has none', () => {
+    renderScreen(<SignIn />, seeds);
+
+    fireEvent.press(screen.getByText('Create an account'));
+
+    expect(mockPush).toHaveBeenCalledWith('/register');
   });
 });

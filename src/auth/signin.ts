@@ -105,3 +105,23 @@ export async function completeTwoFactor(challengeToken: string, code: string): P
 
   useAuthStore.getState().setSession(result, result.user);
 }
+
+/**
+ * Create an account.
+ *
+ * Nobody is signed in by this: the account is unverified until the emailed
+ * link is followed, and signInWithEmail refuses an unverified account. The
+ * device token is not sent either — a guest's credits move on the first
+ * successful sign-in, and moving them onto an account that may never be
+ * confirmed would strand them somewhere worse than where they started.
+ */
+export async function registerWithEmail(
+  email: string,
+  password: string,
+): Promise<{ email: string }> {
+  const result = await api.post<{ email: string; verification_required: boolean }>(
+    '/auth/register',
+    { email: email.trim(), password },
+  );
+  return { email: result.email };
+}
