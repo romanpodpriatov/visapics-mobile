@@ -111,7 +111,15 @@ export function completed(status: TaskStatus | undefined): CompletedTask | null 
 }
 
 /** How long to wait before asking again, or false to stop asking. */
-export function nextPoll(state: string | undefined, elapsedMs: number): number | false {
+export function nextPoll(
+  state: string | undefined,
+  elapsedMs: number,
+  error?: unknown,
+): number | false {
+  // A 4xx is a verdict, not a hiccup. Production showed a refused photo being
+  // polled 150 times in three minutes for the same answer, while the screen
+  // said "Preparing your photo…". A 5xx is worth another go.
+  if (error instanceof ApiError && error.status < 500) return false;
   if (state === 'SUCCESS') return false;
   if (elapsedMs >= POLL_DEADLINE_MS) return false;
   return POLL_INTERVAL_MS;
@@ -130,7 +138,7 @@ export function usePhotoStatus(taskId: string | null) {
     // ApiError — so the query's error is the failure, and retryPolicy already
     // knows not to retry something the server meant.
     refetchInterval: (query) =>
-      nextPoll(query.state.data?.state, Date.now() - startedAt.current),
+      nextPoll(query.state.data?.state, Date.now() - startedAt.current, query.state.error),
   });
 }
 

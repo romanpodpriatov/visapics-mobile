@@ -298,3 +298,51 @@ describe('result', () => {
     expect(await screen.findByText('Saved to your vault')).toBeTruthy();
   });
 });
+
+describe('a photo the pipeline refused', () => {
+  beforeEach(() => {
+    useDraftStore.setState({
+      countryCode: 'gb',
+      documentType: 'UK Passport offline 35x45 mm',
+      taskId: 'task-1',
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const refuse = (error: ApiError) =>
+    jest.spyOn(api, 'get').mockImplementation(((path: string) =>
+      path.startsWith('/photo/status')
+        ? Promise.reject(error)
+        : Promise.resolve({})) as never);
+
+  it('says the photo was refused instead of announcing it is ready', async () => {
+    // Production: the pipeline said "Quality check failed" and the screen said
+    // "Your photo is ready." over "Preparing your photo…", for ever.
+    refuse(new ApiError('Quality check failed', 400, 'E400_PROCESSING'));
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText('Quality check failed')).toBeTruthy();
+    expect(screen.queryByText('Your photo is ready.')).toBeNull();
+    expect(screen.queryByText('Preparing your photo…')).toBeNull();
+  });
+
+  it('offers a way out rather than a dead screen', async () => {
+    refuse(new ApiError('Quality check failed', 400, 'E400_PROCESSING'));
+    renderScreen(<Result />, seeds);
+
+    fireEvent.press(await screen.findByText('Take a new photo'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/photos');
+  });
+
+  it('carries the detail the server sent, which is the part that helps', async () => {
+    refuse(
+      new ApiError('Photo processing failed', 400, 'E400_PROCESSING', {
+        details: 'Image resolution too low. Your image is 300x400 pixels',
+      }),
+    );
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText(/300x400 pixels/)).toBeTruthy();
+  });
+});

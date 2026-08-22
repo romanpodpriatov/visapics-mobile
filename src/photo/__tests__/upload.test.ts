@@ -216,3 +216,20 @@ describe('the multipart part itself', () => {
     expect(photo.type).toBe('image/jpeg');
   });
 });
+
+describe('nextPoll when the server has already ruled', () => {
+  it('stops asking after a 400: the task has a verdict recorded', () => {
+    // Seen in production: a photo the pipeline refused was polled 150 times in
+    // three minutes, every answer identical, while the screen said "Preparing
+    // your photo…". A 4xx is a verdict, not a hiccup.
+    expect(nextPoll(undefined, 0, new ApiError('Quality check failed', 400, 'E400'))).toBe(false);
+  });
+
+  it('keeps asking after a 500, which may well pass next time', () => {
+    expect(nextPoll(undefined, 0, new ApiError('Bad gateway', 502, 'E502'))).toBe(POLL_INTERVAL_MS);
+  });
+
+  it('keeps asking when nothing has gone wrong', () => {
+    expect(nextPoll('PROCESSING', 0)).toBe(POLL_INTERVAL_MS);
+  });
+});

@@ -60,6 +60,18 @@ export default function Result() {
   const [savedToVault, setSavedToVault] = useState(false);
   const queryClient = useQueryClient();
 
+  /**
+   * The pipeline can refuse a photo — too dark, no face, resolution too low —
+   * and it says so with a 400. Production found this screen announcing "Your
+   * photo is ready" over "Preparing your photo…" while the server had already
+   * ruled, and polling for the same answer every second and a half.
+   */
+  const rejected = status.error instanceof ApiError ? status.error : null;
+  const rejectedDetail =
+    rejected && typeof rejected.data === 'object' && rejected.data !== null
+      ? String((rejected.data as { details?: unknown }).details ?? '')
+      : '';
+
   const result = completed(status.data);
   const compliance = result?.compliance;
   const checks = (compliance?.checks ?? []).filter((c) => c.verdict !== 'not_applicable');
@@ -165,18 +177,30 @@ export default function Result() {
         </Text>
       </View>
 
-      <Text style={styles.eyebrow}>◆ {failed ? 'Not compliant yet' : 'Your result'}</Text>
+      <Text style={styles.eyebrow}>
+        ◆ {rejected ? 'Not processed' : failed ? 'Not compliant yet' : 'Your result'}
+      </Text>
       <Text style={styles.headline}>
-        {failed
-          ? failing.length === 1
-            ? 'One rule needs fixing.'
-            : `${failing.length} rules need fixing.`
-          : compliance
-            ? `Passed all ${compliance.total} checks.`
-            : 'Your photo is ready.'}
+        {rejected
+          ? 'This photo could not be processed.'
+          : failed
+            ? failing.length === 1
+              ? 'One rule needs fixing.'
+              : `${failing.length} rules need fixing.`
+            : compliance
+              ? `Passed all ${compliance.total} checks.`
+              : 'Your photo is ready.'}
       </Text>
 
-      {!failed && printImage ? (
+      {rejected ? (
+        <Card style={[styles.photoCard, shadow.subtle]}>
+          <Text style={styles.rejected}>{rejected.message}</Text>
+          {rejectedDetail ? <Text style={styles.rejectedDetail}>{rejectedDetail}</Text> : null}
+          <Button label="Take a new photo" onPress={() => router.replace('/photos')} />
+        </Card>
+      ) : null}
+
+      {rejected ? null : !failed && printImage ? (
         <View style={styles.tabs}>
           <Pressable
             onPress={() => setTab('digital')}
@@ -199,6 +223,7 @@ export default function Result() {
         </View>
       ) : null}
 
+      {rejected ? null : (
       <Card style={[styles.photoCard, shadow.subtle]}>
         {tab === 'digital' || failed ? (
           digitalImage ? (
@@ -227,6 +252,7 @@ export default function Result() {
           </>
         )}
       </Card>
+      )}
 
       {checks.length ? (
         <Card flush style={styles.reportCard}>
@@ -335,6 +361,20 @@ export default function Result() {
 }
 
 const styles = StyleSheet.create({
+  rejected: {
+    fontFamily: theme.type.bodyMedium,
+    fontSize: 15,
+    lineHeight: 22,
+    color: theme.color.text,
+    marginBottom: theme.space.sm,
+  },
+  rejectedDetail: {
+    fontFamily: theme.type.body,
+    fontSize: 13,
+    lineHeight: 19.5,
+    color: theme.color.muted,
+    marginBottom: theme.space.lg,
+  },
   screen: { flex: 1, backgroundColor: theme.color.surface },
   content: { paddingHorizontal: theme.space.xl, paddingBottom: theme.space.xl },
 
