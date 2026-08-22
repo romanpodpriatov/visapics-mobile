@@ -25,12 +25,13 @@ import {
   useFrameOutput,
   usePhotoOutput,
 } from 'react-native-vision-camera';
-import { type Face, useFaceDetectorOutput } from 'react-native-vision-camera-face-detector';
+import type { Face } from 'react-native-vision-camera-face-detector';
 import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
 
 import { useSpecifications } from '../src/api/hooks';
 import { GUIDE_WIDTH_SHARE, type CaptureSpec, type FrameStats } from '../src/capture/checks';
 import { readFrameStats } from '../src/capture/frameStats';
+import { useStableFaceOutput } from '../src/capture/faceOutput';
 import { type SessionFacts, describeSession } from '../src/capture/session';
 import { shouldSample } from '../src/capture/throttle';
 import { useCoaching } from '../src/capture/useCoaching';
@@ -98,6 +99,13 @@ export default function Capture() {
   const [dropped, setDropped] = useState(0);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const noteDrop = useCallback(() => setDropped((seen) => seen + 1), []);
+  /**
+   * Why the pixels could not be read, when they could not. "Not measured" says
+   * something went wrong but not what, and the worklet runs on a thread no
+   * debugger reaches on a device. The frame itself knows the answer.
+   */
+  const [statsProblem, setStatsProblem] = useState<string | null>(null);
+  const noteStatsProblem = useCallback((reason: string) => setStatsProblem(reason), []);
 
   const handleFaces = useCallback(
     (faces: Face[]) => {
@@ -116,11 +124,7 @@ export default function Capture() {
     [onFaces, width],
   );
 
-  const faceOutput = useFaceDetectorOutput({
-    performanceMode: 'fast',
-    onFacesDetected: handleFaces,
-    onError: () => undefined,
-  });
+  const faceOutput = useStableFaceOutput(handleFaces);
 
   const handleStats = useCallback((stats: FrameStats | null) => onStats(stats), [onStats]);
 
@@ -155,12 +159,28 @@ export default function Capture() {
       lastSampledAt.setBlocking(now);
 
       const stats = readFrameStats(frame);
+      // Read before disposing: afterwards the frame answers nothing.
+      const reason = stats
+        ? null
+        : !frame.hasPixelBuffer
+          ? 'no cpu buffer'
+          : !frame.isPlanar
+            ? 'not planar'
+            : 'no planes';
       // The Frame has to be released immediately or the camera pipeline stalls.
       frame.dispose();
       scheduleOnRN(handleStats, stats);
+      if (reason !== null) scheduleOnRN(noteStatsProblem, reason);
     },
     onFrameDropped: noteDrop,
   });
+
+  // Memoized for the same reason as the detector: a new array of the same
+  // outputs is cheap, a reconfigured session is not.
+  const outputs = useMemo(
+    () => [photoOutput, faceOutput, frameOutput],
+    [photoOutput, faceOutput, frameOutput],
+  );
 
   const wasReady = useRef(false);
   useEffect(() => {
@@ -217,7 +237,7 @@ export default function Capture() {
           style={StyleSheet.absoluteFill}
           device={device}
           isActive
-          outputs={[photoOutput, faceOutput, frameOutput]}
+          outputs={outputs}
           /**
            * Said where the session negotiates it, rather than hoped for from
            * the outputs' side. Binning is VisionCamera's own answer to both
@@ -311,6 +331,7 @@ export default function Capture() {
       {session ? (
         <Text style={[styles.sessionFacts, { bottom: insets.bottom + 130 }]} pointerEvents="none">
           {describeSession(session, dropped)}
+          {statsProblem ? ` · ${statsProblem}` : ''}
         </Text>
       ) : null}
 

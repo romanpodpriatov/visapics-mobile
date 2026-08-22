@@ -69,11 +69,14 @@ jest.mock('../src/capture/frameStats', () => ({
 
 /** Captured so the test can play the detector's part. */
 let emitFaces: ((faces: unknown[]) => void) | null = null;
-jest.mock('react-native-vision-camera-face-detector', () => ({
-  useFaceDetectorOutput: (options: { onFacesDetected: (faces: unknown[]) => void }) => {
+const mockCreateFaceOutput = jest.fn(
+  (options: { onFacesDetected: (faces: unknown[]) => void }) => {
     emitFaces = options.onFacesDetected;
     return {};
   },
+);
+jest.mock('react-native-vision-camera-face-detector', () => ({
+  createFaceDetectorOutput: (options: never) => mockCreateFaceOutput(options),
 }));
 
 jest.mock('react-native-worklets', () => ({
@@ -316,5 +319,54 @@ describe('the camera session', () => {
     render();
 
     expect(cameraProps?.constraints).toEqual([{ binned: true }, { fps: 30 }]);
+  });
+
+  it('builds the face detector once, however often the screen re-renders', () => {
+    // The library's own hook memoizes on a rest object it rebuilds every
+    // render, so the output was new every time — and VisionCamera's note is
+    // explicit: "The outputs have to be explicitly memoized." A session that
+    // reconfigures on every render never gets round to reporting a face,
+    // which is why all four gates sat at 0/4 whatever the person did.
+    mockCreateFaceOutput.mockClear();
+    render();
+
+    const first = mockCreateFaceOutput.mock.calls.length;
+    act(() =>
+      cameraProps?.onSessionConfigSelected?.({
+        isBinned: true,
+        selectedFPS: 30,
+        nativePixelFormat: 'yuv',
+      }),
+    );
+    act(() => cameraProps?.onError?.(new Error('anything')));
+
+    expect(first).toBe(1);
+    expect(mockCreateFaceOutput).toHaveBeenCalledTimes(1);
+  });
+
+  it('says why the pixels could not be read, when they could not', () => {
+    // "NOT MEASURED" on lighting and background says something went wrong but
+    // not what, and the worklet runs where no debugger reaches. The frame
+    // itself knows: no CPU buffer, not planar, or no planes at all.
+    jest.mocked(readFrameStats).mockReturnValueOnce(null);
+    render();
+
+    act(() =>
+      cameraProps?.onSessionConfigSelected?.({
+        isBinned: true,
+        selectedFPS: 30,
+        nativePixelFormat: 'yuv',
+      }),
+    );
+    act(() =>
+      frameOptions?.onFrame({
+        isValid: true,
+        hasPixelBuffer: false,
+        isPlanar: true,
+        dispose: jest.fn(),
+      }),
+    );
+
+    expect(screen.getByText(/no cpu buffer/)).toBeTruthy();
   });
 });
