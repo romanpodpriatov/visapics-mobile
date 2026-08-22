@@ -32,7 +32,7 @@ import { useConfig, useSpecifications } from '../src/api/hooks';
 import { GUIDE_WIDTH_SHARE, type FrameStats } from '../src/capture/gate';
 import { readFrameStats } from '../src/capture/frameStats';
 import { useStableFaceOutput } from '../src/capture/faceOutput';
-import { type SessionFacts, describeSession } from '../src/capture/session';
+import { type SessionFacts, describeFace, describeSession } from '../src/capture/session';
 import { shouldSample } from '../src/capture/throttle';
 import { useCoaching } from '../src/capture/useCoaching';
 import { useDraftStore } from '../src/store/draft';
@@ -51,7 +51,7 @@ export default function Capture() {
   // The server's own limits, never numbers of our own: the shutter has to arm
   // exactly when the pipeline's quality gate would pass the same face.
   const { data: config } = useConfig();
-  const { state, onFaces, onStats } = useCoaching(config?.quality ?? null);
+  const { state, sample, onFaces, onStats } = useCoaching(config?.quality ?? null);
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
@@ -309,6 +309,7 @@ export default function Capture() {
         <Text style={[styles.sessionFacts, { bottom: insets.bottom + 130 }]} pointerEvents="none">
           {describeSession(session, dropped)}
           {statsProblem ? ` · ${statsProblem}` : ''}
+          {sample ? `\n${describeFace(sample.face, sample.frame)}` : ''}
         </Text>
       ) : null}
 

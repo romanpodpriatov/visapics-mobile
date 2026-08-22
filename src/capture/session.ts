@@ -26,3 +26,31 @@ export function describeSession(config: SessionFacts, dropped = 0): string {
   if (dropped > 0) parts.push(`${dropped} dropped`);
   return parts.join(' · ');
 }
+
+
+/**
+ * What the detector actually reported, in one line.
+ *
+ * Written because every reading of this library's coordinate convention has
+ * been wrong so far: it transposes x and y for both bounds and landmarks
+ * (ios/HybridFace.swift: `x: boundingBox.minY`), and hands back ML Kit's Euler
+ * angles untouched. Rather than guess a fifth time, the device says.
+ */
+export function describeFace(
+  face: {
+    bounds: { x: number; y: number; width: number; height: number };
+    rollAngle: number;
+    yawAngle: number;
+  } | null,
+  frame: { width: number; height: number },
+): string {
+  if (!face) return `no face · frame ${frame.width}×${frame.height}`;
+
+  const { x, y, width, height } = face.bounds;
+  const round = (value: number) => Math.round(value);
+  return (
+    `face ${round(x)},${round(y)} ${round(width)}×${round(height)} ` +
+    `of ${frame.width}×${frame.height} · ` +
+    `roll ${round(face.rollAngle)} yaw ${round(face.yawAngle)}`
+  );
+}
