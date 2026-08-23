@@ -10,7 +10,7 @@ const LIMITS = {
   head_margin_ratio_min: 0.03,
   exposure_median_min: 80,
   exposure_median_max: 180,
-  advisory: ['exposure'],
+  advisory: ['exposure', 'head_in_frame'],
 };
 
 const FRAME = { width: 1000, height: 1000 };

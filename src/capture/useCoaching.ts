@@ -29,6 +29,7 @@ const WAITING: GateState = {
   })),
   hint: 'Show your face in the frame',
   ready: false,
+  tilt: null,
 };
 
 export function useCoaching(limits: QualityLimits | null) {

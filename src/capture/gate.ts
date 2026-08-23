@@ -93,7 +93,18 @@ export type LiveCheck = {
    */
   detail?: string;
 };
-export type GateState = { checks: LiveCheck[]; ready: boolean; hint: string };
+export type GateState = {
+  checks: LiveCheck[];
+  ready: boolean;
+  hint: string;
+  /**
+   * How far the head is off level, in degrees, or null when there is no face.
+   * The screen draws a line at this angle: "hold your head straight" says
+   * nothing about which way or how far, and a line the person levels against
+   * the horizon converges on zero whichever way the sign runs.
+   */
+  tilt: number | null;
+};
 
 export type FaceSample = {
   bounds: { x: number; y: number; width: number; height: number };
@@ -163,7 +174,12 @@ export function evaluateGate(
   // Without the server's numbers there is nothing to judge against, and
   // guessing is the whole mistake this file exists to undo.
   if (!limits) {
-    return { checks: LIVE_CHECK_KEYS.map(unmeasured), ready: false, hint: WAITING_HINT };
+    return {
+      checks: LIVE_CHECK_KEYS.map(unmeasured),
+      ready: false,
+      hint: WAITING_HINT,
+      tilt: null,
+    };
   }
 
   const check = (key: LiveCheckKey, status: CheckStatus, detail?: string): LiveCheck => ({
@@ -242,5 +258,6 @@ export function evaluateGate(
     checks: ordered,
     ready: !blocking,
     hint: blocking ? HINTS[blocking.key] : READY_HINT,
+    tilt: face ? headRoll(face.rollAngle) : null,
   };
 }

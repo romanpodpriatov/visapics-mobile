@@ -9,7 +9,7 @@ const LIMITS = {
   head_margin_ratio_min: 0.03,
   exposure_median_min: 80,
   exposure_median_max: 180,
-  advisory: ['exposure'],
+  advisory: ['exposure', 'head_in_frame'],
 };
 
 const FRAME = { width: 1000, height: 1000 };
@@ -97,10 +97,14 @@ describe('the live gate', () => {
     expect(run(small).hint).toMatch(/closer|nearer/i);
   });
 
-  it('refuses a head against the edge of the frame', () => {
+  it('shows a head against the edge without holding the shutter over it', () => {
+    // The detector clamps its box to the frame, so a head cropped by the edge
+    // reads as a head neatly inside it: the check cannot fail honestly, and
+    // the server refuses a cropped head anyway.
     const edge = { ...GOOD_FACE, bounds: { x: 10, y: 300, width: 300, height: 400 } };
 
     expect(statusOf(run(edge), 'head_in_frame')).toBe('fail');
+    expect(run(edge).ready).toBe(true);
   });
 
   it('says so plainly when there is no face at all', () => {
@@ -203,5 +207,19 @@ describe('what each check measured', () => {
 
   it('says nothing it did not measure', () => {
     expect(detailOf(evaluateGate(null, FRAME, GOOD_STATS, LIMITS), 'pose')).toBeUndefined();
+  });
+});
+
+
+describe('the tilt the screen can draw', () => {
+  it('reports the tilt it measured, so the guide can show it', () => {
+    // "Hold your head straight" says nothing about which way or how far. A
+    // line drawn at the measured angle does, and aligning it to horizontal
+    // converges on zero whichever way the sign runs.
+    expect(run({ ...GOOD_FACE, rollAngle: -82 }).tilt).toBeCloseTo(8, 1);
+  });
+
+  it('reports no tilt when it has no face to measure', () => {
+    expect(evaluateGate(null, FRAME, GOOD_STATS, LIMITS).tilt).toBeNull();
   });
 });

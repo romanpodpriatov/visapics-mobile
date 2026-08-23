@@ -190,6 +190,7 @@ export default function Capture() {
     return () => clearTimeout(id);
   }, [countdown, state.ready, capture]);
 
+  const level = state.checks.find((check) => check.key === 'pose')?.status === 'pass';
   const guideWidth = width * GUIDE_WIDTH_SHARE;
   // The guide takes its shape from the document, so the person frames for the
   // photo they are actually making. What decides is the gate, not the box.
@@ -235,6 +236,24 @@ export default function Capture() {
       <View style={[styles.guide, { width: guideWidth, height: guideHeight }]}>
         <View style={styles.oval} />
         <View style={[styles.eyeLine, { top: guideHeight * 0.42 }]} />
+
+        {/*
+          A line drawn at the tilt that was measured. "Hold your head straight"
+          says nothing about which way or how far; this does, and levelling it
+          against the horizon converges on zero whichever way the sign runs.
+          The server refuses past three degrees — it refused a real photo of
+          this person's at 5.6 — so it has to be correctable, not just stated.
+        */}
+        {state.tilt !== null ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.tiltLine,
+              { top: guideHeight * 0.42, transform: [{ rotate: `${state.tilt}deg` }] },
+              level && styles.tiltLineLevel,
+            ]}
+          />
+        ) : null}
       </View>
 
       <View style={[styles.topBar, { paddingTop: insets.top + theme.space.sm }]}>
@@ -361,6 +380,15 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255,255,255,.55)',
   },
+  tiltLine: {
+    position: 'absolute',
+    left: '14%',
+    right: '14%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: theme.color.warning,
+  },
+  tiltLineLevel: { backgroundColor: theme.color.success },
 
   topBar: {
     position: 'absolute',
