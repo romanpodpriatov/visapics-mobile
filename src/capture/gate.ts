@@ -28,6 +28,12 @@ export type QualityLimits = {
   background_std_max: number;
 };
 
+/**
+ * Six, not the server's thirteen, and deliberately without `background`: every
+ * photo is processed with remove_background, so refusing a shot over the wall
+ * behind someone would block a picture the pipeline was about to fix. The
+ * server still warns about the background of the original.
+ */
 export const LIVE_CHECK_KEYS = [
   'face_detection',
   'head_in_frame',
@@ -35,7 +41,6 @@ export const LIVE_CHECK_KEYS = [
   'pose',
   'exposure',
   'shadows',
-  'background',
 ] as const;
 
 export type LiveCheckKey = (typeof LIVE_CHECK_KEYS)[number];
@@ -48,7 +53,6 @@ export const LIVE_CHECK_LABELS: Record<LiveCheckKey, string> = {
   pose: 'Head straight',
   exposure: 'Exposure',
   shadows: 'Even lighting',
-  background: 'Background',
 };
 
 /** What to say about the first thing standing in the way. */
@@ -59,7 +63,6 @@ const HINTS: Record<LiveCheckKey, string> = {
   pose: 'Hold your head straight',
   exposure: 'Find brighter, even light',
   shadows: 'Even out the light on your face',
-  background: 'Use a plainer, lighter background',
 };
 
 /**
@@ -161,24 +164,23 @@ export function evaluateGate(
 
   if (stats) {
     const median = stats.luma * 255;
+    const exposed =
+      median >= limits.exposure_median_min && median <= limits.exposure_median_max;
     checks.push(
+      check('exposure', verdict(exposed)),
+      // Evenness of nothing is not a measurement. In the dark every part of
+      // the frame is equally dark, the spread is zero, and a pitch-black
+      // preview showed a green tick for even lighting.
       check(
-        'exposure',
-        verdict(median >= limits.exposure_median_min && median <= limits.exposure_median_max),
-      ),
-      check('shadows', verdict(stats.lumaSpread * 255 <= limits.shadow_diff_max)),
-      check(
-        'background',
-        stats.backgroundVariance === undefined
-          ? 'unmeasured'
-          : verdict(stats.backgroundVariance * 255 <= limits.background_std_max),
+        'shadows',
+        exposed ? verdict(stats.lumaSpread * 255 <= limits.shadow_diff_max) : 'unmeasured',
       ),
     );
   } else {
     // A phone whose frame worklet does not run must still be able to take a
     // photo. Saying "not measured" is honest; refusing for ever is not, and
     // the server checks all three again anyway.
-    checks.push(unmeasured('exposure'), unmeasured('shadows'), unmeasured('background'));
+    checks.push(unmeasured('exposure'), unmeasured('shadows'));
   }
 
   const ordered = LIVE_CHECK_KEYS.map((key) => checks.find((c) => c.key === key)!);

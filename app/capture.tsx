@@ -194,10 +194,9 @@ export default function Capture() {
     ? guideWidth * (summary.photo_height_mm / summary.photo_width_mm)
     : guideWidth * 1.29;
 
-  // Only what could be judged counts: a check the frame could not measure is
-  // neither a pass to boast about nor a failure to blame.
-  const judged = state.checks.filter((check) => check.status !== 'unmeasured');
-  const passing = judged.filter((check) => check.status === 'pass');
+  // What is left to do, rather than a fraction whose denominator moves with
+  // whatever happened to be measurable this frame.
+  const failing = state.checks.filter((check) => check.status === 'fail');
 
   return (
     <View style={styles.screen}>
@@ -319,10 +318,8 @@ export default function Capture() {
           </View>
         </Pressable>
         <View style={styles.bottomSlot}>
-          <Text style={styles.counter}>
-            {passing.length}/{judged.length}
-          </Text>
-          <Text style={styles.counterCaption}>checks</Text>
+          <Text style={styles.counter}>{state.ready ? 'Ready' : `${failing.length} to fix`}</Text>
+          <Text style={styles.counterCaption}>{state.ready ? 'to shoot' : 'before shooting'}</Text>
         </View>
       </View>
 

@@ -154,7 +154,7 @@ describe('capture', () => {
     renderScreen(<Capture />, seeds);
     see([goodFace]);
 
-    expect(screen.getByText('4/4')).toBeTruthy();
+    expect(screen.getByText('Ready')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Take photo'));
 
     // Three seconds, a second at a time, so each tick's state update lands
@@ -186,14 +186,13 @@ describe('capture', () => {
     expect(mockCapturePhoto).not.toHaveBeenCalled();
   });
 
-  it('counts the checks that pass', () => {
+  it('counts what is left to fix, not a fraction of a moving denominator', () => {
+    // "2/4" beside seven tiles was arithmetic about which checks happened to
+    // be measurable, which is not a thing anyone is trying to find out.
     renderScreen(<Capture />, seeds);
+    see([{ ...goodFace, rollAngle: 30 }]);
 
-    see([smallFace]);
-    expect(screen.getByText('3/4')).toBeTruthy();
-
-    see([goodFace]);
-    expect(screen.getByText('4/4')).toBeTruthy();
+    expect(screen.getByText('1 to fix')).toBeTruthy();
   });
 
   it('does not claim the light was checked before a frame was read', () => {
@@ -203,7 +202,7 @@ describe('capture', () => {
     renderScreen(<Capture />, seeds);
     see([goodFace]);
 
-    expect(screen.getAllByText('Not measured')).toHaveLength(3);
+    expect(screen.getAllByText('Not measured')).toHaveLength(2);
   });
 
   it('judges the face by the server\u2019s own limits, under the server\u2019s names', () => {

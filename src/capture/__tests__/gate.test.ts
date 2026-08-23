@@ -24,7 +24,7 @@ const GOOD_FACE = {
 
 const GOOD_STATS = { luma: 130 / 255, lumaSpread: 5 / 255, backgroundVariance: 10 / 255 };
 
-const run = (face = GOOD_FACE, stats = GOOD_STATS, frame = FRAME) =>
+const run = (face = GOOD_FACE, stats: typeof GOOD_STATS | { luma: number; lumaSpread: number } = GOOD_STATS, frame = FRAME) =>
   evaluateGate(face, frame, stats, LIMITS);
 
 const statusOf = (result: ReturnType<typeof evaluateGate>, key: string) =>
@@ -48,7 +48,6 @@ describe('the live gate', () => {
       'pose',
       'exposure',
       'shadows',
-      'background',
     ]);
   });
 
@@ -106,10 +105,26 @@ describe('the live gate', () => {
     expect(run(GOOD_FACE, shadowed).hint).toMatch(/light|shadow/i);
   });
 
-  it('refuses a busy background', () => {
-    const busy = { ...GOOD_STATS, backgroundVariance: 45 / 255 };
+  it('does not judge the background at all, because the pipeline replaces it', () => {
+    // Every photo is processed with remove_background, so a live verdict on
+    // the wall behind someone would refuse a shot the server was going to fix
+    // anyway. The server still warns about it on the original.
+    const busy = { ...GOOD_STATS, backgroundVariance: 200 / 255 };
 
-    expect(statusOf(run(GOOD_FACE, busy), 'background')).toBe('fail');
+    expect(run(GOOD_FACE, busy).checks.map((c) => String(c.key))).not.toContain('background');
+    expect(run(GOOD_FACE, busy).ready).toBe(true);
+  });
+
+  it('will not call darkness even lighting', () => {
+    // In the dark every part of the frame is equally dark, so the spread is
+    // zero and evenness "passes" — which is how a pitch-black preview showed a
+    // green tick. Evenness of nothing is not a measurement.
+    const dark = { luma: 5 / 255, lumaSpread: 0 };
+    const result = run(GOOD_FACE, dark);
+
+    expect(statusOf(result, 'exposure')).toBe('fail');
+    expect(statusOf(result, 'shadows')).toBe('unmeasured');
+    expect(result.ready).toBe(false);
   });
 
   it('does not block the shutter on light it could not measure', () => {
