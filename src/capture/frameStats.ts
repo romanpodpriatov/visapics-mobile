@@ -1,5 +1,5 @@
 /**
- * Brightness and background statistics, read off the camera frame.
+ * Brightness statistics, read off the camera frame.
  *
  * This is the only part of the coaching that needs pixels rather than face
  * geometry, and it runs in a worklet on the frame-processing thread, so it has
@@ -39,36 +39,39 @@ export function readFrameStats(frame: Frame): FrameStats | null {
   const stepX = Math.max(1, Math.floor(width / SAMPLE_TARGET));
   const stepY = Math.max(1, Math.floor(height / SAMPLE_TARGET));
 
+  // The band a framed face occupies. The server measures shadow across the
+  // face; measuring across the whole frame let a window behind someone read as
+  // a shadow on their cheek, which failed "Even lighting" in evenly lit rooms.
+  const faceLeft = width * 0.25;
+  const faceRight = width * 0.75;
+  const faceTop = height * 0.15;
+  const faceBottom = height * 0.75;
+  const faceMiddle = (faceLeft + faceRight) / 2;
+
   let total = 0;
   let count = 0;
   let leftTotal = 0;
   let leftCount = 0;
   let rightTotal = 0;
   let rightCount = 0;
-  // The band across the top, which is behind the head in a portrait frame.
-  let backTotal = 0;
-  let backCount = 0;
-  let backSquares = 0;
 
   for (let y = 0; y < height; y += stepY) {
     const row = y * bytesPerRow;
+    const withinFaceRows = y >= faceTop && y <= faceBottom;
+
     for (let x = 0; x < width; x += stepX) {
       const value = buffer[row + x] / 255;
       total += value;
       count += 1;
 
-      if (x < width / 3) {
+      if (!withinFaceRows || x < faceLeft || x > faceRight) continue;
+
+      if (x < faceMiddle) {
         leftTotal += value;
         leftCount += 1;
-      } else if (x > (width * 2) / 3) {
+      } else {
         rightTotal += value;
         rightCount += 1;
-      }
-
-      if (y < height / 4) {
-        backTotal += value;
-        backSquares += value * value;
-        backCount += 1;
       }
     }
   }
@@ -79,12 +82,5 @@ export function readFrameStats(frame: Frame): FrameStats | null {
   const left = leftCount > 0 ? leftTotal / leftCount : luma;
   const right = rightCount > 0 ? rightTotal / rightCount : luma;
 
-  let backgroundVariance: number | undefined;
-  if (backCount > 1) {
-    const mean = backTotal / backCount;
-    // Standard deviation of the band, which rises with pattern and shadow.
-    backgroundVariance = Math.sqrt(Math.max(0, backSquares / backCount - mean * mean));
-  }
-
-  return { luma, lumaSpread: Math.abs(left - right), backgroundVariance };
+  return { luma, lumaSpread: Math.abs(left - right) };
 }

@@ -43,7 +43,7 @@ export function useCoaching(limits: QualityLimits | null) {
    */
   const [sample, setSample] = useState<{ face: FaceSample | null; frame: FrameSize } | null>(null);
 
-  const onFaces = useCallback((faces: FaceSample[], frame: FrameSize) => {
+  const onFaces = useCallback((faces: FaceSample[], frame: FrameSize | null) => {
     // The largest face is the one holding the phone. A bystander behind them
     // is smaller, and is the server's problem rather than the gate's.
     faceRef.current = faces.reduce<FaceSample | null>(
@@ -51,7 +51,7 @@ export function useCoaching(limits: QualityLimits | null) {
         largest === null || face.bounds.height > largest.bounds.height ? face : largest,
       null,
     );
-    frameRef.current = frame;
+    if (frame) frameRef.current = frame;
   }, []);
 
   const onStats = useCallback((stats: FrameStats | null) => {

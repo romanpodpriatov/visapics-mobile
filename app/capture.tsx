@@ -84,9 +84,12 @@ export default function Capture() {
 
   const handleFaces = useCallback(
     (faces: Face[]) => {
+      // Only a real frame, never a guess. Reporting the screen's size when no
+      // face was found put "440×880" on the diagnostic line and sent me
+      // looking for a transposed buffer that was never there.
       const frame = faces[0]
         ? { width: faces[0].frameWidth, height: faces[0].frameHeight }
-        : { width, height: width * 2 };
+        : null;
       onFaces(
         faces.map((face) => ({
           bounds: face.bounds,
@@ -96,7 +99,7 @@ export default function Capture() {
         frame,
       );
     },
-    [onFaces, width],
+    [onFaces],
   );
 
   const faceOutput = useStableFaceOutput(handleFaces);

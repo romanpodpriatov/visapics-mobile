@@ -88,10 +88,8 @@ export type FrameSize = { width: number; height: number };
 export type FrameStats = {
   /** Mean brightness, 0–1. Multiplied by 255 to meet the gate's scale. */
   luma: number;
-  /** Left-to-right brightness difference, 0–1. */
+  /** Left-to-right brightness difference across the face band, 0–1. */
   lumaSpread: number;
-  /** Variation behind the head, 0–1. Absent when it was not measured. */
-  backgroundVariance?: number;
 };
 
 const READY_HINT = 'Hold still';
@@ -101,9 +99,23 @@ function verdict(passed: boolean): CheckStatus {
   return passed ? 'pass' : 'fail';
 }
 
+/**
+ * How far the head is tilted from upright, in degrees.
+ *
+ * The detector hands back ML Kit's headEulerAngleZ untouched, measured in the
+ * buffer's own frame — and that frame is rotated from the phone's by a
+ * multiple of 90°. On a device this showed as "Head straight" failing
+ * identically for a level head and a tilted one, the reported angle sitting
+ * near -89 either way. The quarter turns belong to the buffer; what is left
+ * over belongs to the head.
+ */
+export function headRoll(reportedDegrees: number): number {
+  return reportedDegrees - 90 * Math.round(reportedDegrees / 90);
+}
+
 function poseWithin(face: FaceSample, limits: QualityLimits): boolean {
   return (
-    Math.abs(face.rollAngle) <= limits.pose_roll_max_deg &&
+    Math.abs(headRoll(face.rollAngle)) <= limits.pose_roll_max_deg &&
     Math.abs(face.yawAngle) <= limits.pose_yaw_max_deg
   );
 }

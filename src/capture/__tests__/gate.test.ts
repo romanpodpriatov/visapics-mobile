@@ -1,4 +1,4 @@
-import { LIVE_CHECK_KEYS, evaluateGate } from '../gate';
+import { LIVE_CHECK_KEYS, evaluateGate, headRoll } from '../gate';
 
 /** Exactly what /api/v1/config serves. */
 const LIMITS = {
@@ -22,9 +22,9 @@ const GOOD_FACE = {
   rollAngle: 0,
 };
 
-const GOOD_STATS = { luma: 130 / 255, lumaSpread: 5 / 255, backgroundVariance: 10 / 255 };
+const GOOD_STATS = { luma: 130 / 255, lumaSpread: 5 / 255 };
 
-const run = (face = GOOD_FACE, stats: typeof GOOD_STATS | { luma: number; lumaSpread: number } = GOOD_STATS, frame = FRAME) =>
+const run = (face = GOOD_FACE, stats = GOOD_STATS, frame = FRAME) =>
   evaluateGate(face, frame, stats, LIMITS);
 
 const statusOf = (result: ReturnType<typeof evaluateGate>, key: string) =>
@@ -109,10 +109,7 @@ describe('the live gate', () => {
     // Every photo is processed with remove_background, so a live verdict on
     // the wall behind someone would refuse a shot the server was going to fix
     // anyway. The server still warns about it on the original.
-    const busy = { ...GOOD_STATS, backgroundVariance: 200 / 255 };
-
-    expect(run(GOOD_FACE, busy).checks.map((c) => String(c.key))).not.toContain('background');
-    expect(run(GOOD_FACE, busy).ready).toBe(true);
+    expect(run().checks.map((c) => String(c.key))).not.toContain('background');
   });
 
   it('will not call darkness even lighting', () => {
@@ -141,5 +138,32 @@ describe('the live gate', () => {
 
     expect(result.ready).toBe(false);
     expect(result.hint).toMatch(/checking|loading|moment/i);
+  });
+});
+
+describe('headRoll', () => {
+  it('reads an upright head as upright, whatever way the buffer lies', () => {
+    // Measured on a device: "Head straight" failed identically for a level
+    // head and a tilted one, because the detector reports ML Kit's angle in
+    // the buffer's own frame — and that frame is rotated from the phone's by
+    // a multiple of 90°. What is left over is the tilt of the head.
+    expect(headRoll(-89.14)).toBeCloseTo(0.86, 2);
+    expect(headRoll(89.5)).toBeCloseTo(-0.5, 2);
+    expect(headRoll(0.4)).toBeCloseTo(0.4, 2);
+    expect(headRoll(179.2)).toBeCloseTo(-0.8, 2);
+  });
+
+  it('still sees a real tilt as a tilt', () => {
+    // A head 20° over, on a buffer lying at -90°.
+    expect(headRoll(-69.14)).toBeCloseTo(20.86, 2);
+    expect(headRoll(20)).toBeCloseTo(20, 2);
+  });
+
+  it('judges the tilt by what is left over, not by the raw angle', () => {
+    const level = { ...GOOD_FACE, rollAngle: -89.14 };
+    const tilted = { ...GOOD_FACE, rollAngle: -69.14 };
+
+    expect(statusOf(run(level), 'pose')).toBe('pass');
+    expect(statusOf(run(tilted), 'pose')).toBe('fail');
   });
 });
