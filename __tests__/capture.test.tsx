@@ -211,7 +211,7 @@ describe('capture', () => {
     renderScreen(<Capture />, seeds);
     see([{ ...goodFace, rollAngle: 30 }]);
 
-    expect(screen.getByText(/roll 30° yaw 0° · max 2°\/5°/)).toBeTruthy();
+    expect(screen.getByText(/roll 30° yaw 0° · max 3°\/8°/)).toBeTruthy();
   });
 
   it('judges the face by the server\u2019s own limits, under the server\u2019s names', () => {

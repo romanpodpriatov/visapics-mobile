@@ -3,15 +3,14 @@ import { act, renderHook } from '@testing-library/react-native';
 import { useCoaching } from '../useCoaching';
 
 const LIMITS = {
-  pose_roll_max_deg: 2,
-  pose_yaw_max_deg: 5,
-  pose_pitch_max_deg: 5,
-  face_area_ratio_min: 0.05,
+  pose_roll_max_deg: 3,
+  pose_yaw_max_deg: 8,
+  pose_pitch_max_deg: 8,
+  face_area_ratio_min: 0.02,
   head_margin_ratio_min: 0.03,
   exposure_median_min: 80,
   exposure_median_max: 180,
-  shadow_diff_max: 25,
-  background_std_max: 30,
+  advisory: ['exposure'],
 };
 
 const FRAME = { width: 1000, height: 1000 };

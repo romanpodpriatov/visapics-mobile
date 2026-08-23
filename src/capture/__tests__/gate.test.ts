@@ -2,15 +2,14 @@ import { LIVE_CHECK_KEYS, evaluateGate, headRoll } from '../gate';
 
 /** Exactly what /api/v1/config serves. */
 const LIMITS = {
-  pose_roll_max_deg: 2,
-  pose_yaw_max_deg: 5,
-  pose_pitch_max_deg: 5,
-  face_area_ratio_min: 0.05,
+  pose_roll_max_deg: 3,
+  pose_yaw_max_deg: 8,
+  pose_pitch_max_deg: 8,
+  face_area_ratio_min: 0.02,
   head_margin_ratio_min: 0.03,
   exposure_median_min: 80,
   exposure_median_max: 180,
-  shadow_diff_max: 25,
-  background_std_max: 30,
+  advisory: ['exposure'],
 };
 
 const FRAME = { width: 1000, height: 1000 };
@@ -51,9 +50,7 @@ describe('the live gate', () => {
   });
 
   it('refuses a head rolled past the gate, which is what refused the real photo', () => {
-    // Production: roll -5.6 degrees, gate passes at 2, and the app was not
-    // looking at roll at all — so it armed the shutter on a photo the server
-    // was always going to reject.
+    // Production: roll -5.6 degrees, and the gate blocks past 3.
     const result = run({ ...GOOD_FACE, rollAngle: -5.6 });
 
     expect(statusOf(result, 'pose')).toBe('fail');
@@ -61,17 +58,40 @@ describe('the live gate', () => {
     expect(result.hint).toMatch(/straight|tilt/i);
   });
 
-  it('accepts a roll inside the gate', () => {
-    expect(statusOf(run({ ...GOOD_FACE, rollAngle: 1.9 }), 'pose')).toBe('pass');
+  it('accepts a roll the gate would only warn about', () => {
+    // Measured on a device: a level head reads about 3 degrees. Refusing that
+    // means a shutter that never arms, for a photo the server processes
+    // without complaint.
+    expect(statusOf(run({ ...GOOD_FACE, rollAngle: 2.9 }), 'pose')).toBe('pass');
   });
 
   it('refuses a head turned past the yaw limit', () => {
-    expect(statusOf(run({ ...GOOD_FACE, yawAngle: 6 }), 'pose')).toBe('fail');
+    expect(statusOf(run({ ...GOOD_FACE, yawAngle: 9 }), 'pose')).toBe('fail');
+  });
+
+  it('shows a poor exposure without locking the shutter over it', () => {
+    // Median brightness only ever raises TOO_DARK or UNDEREXPOSED on the
+    // server, both of which let processing continue. What blocks is the share
+    // of pure black pixels, which a preview cannot measure.
+    const dim = { ...GOOD_STATS, luma: 50 / 255 };
+    const result = run(GOOD_FACE, dim);
+
+    expect(statusOf(result, 'exposure')).toBe('fail');
+    expect(result.ready).toBe(true);
+  });
+
+  it('judges the exposure by the number it shows', () => {
+    // "80 · 80–180" beside a red tile is an argument with itself.
+    const borderline = { ...GOOD_STATS, luma: 79.6 / 255 };
+    const result = run(GOOD_FACE, borderline);
+
+    expect(result.checks.find((c) => c.key === 'exposure')?.detail).toBe('80 · 80–180');
+    expect(statusOf(result, 'exposure')).toBe('pass');
   });
 
   it('refuses a face too small for the gate', () => {
-    // 0.05 of the frame area is the gate's warning line.
-    const small = { ...GOOD_FACE, bounds: { x: 480, y: 480, width: 100, height: 150 } };
+    // Below 0.02 of the frame the gate raises FACE_TOO_SMALL, which blocks.
+    const small = { ...GOOD_FACE, bounds: { x: 490, y: 490, width: 60, height: 80 } };
 
     expect(statusOf(run(small), 'face_size')).toBe('fail');
     expect(run(small).hint).toMatch(/closer|nearer/i);
@@ -165,12 +185,12 @@ describe('what each check measured', () => {
 
   it('shows the tilt it read, and the limit it read it against', () => {
     expect(detailOf(run({ ...GOOD_FACE, rollAngle: -69.14 }), 'pose')).toBe(
-      'roll 21° yaw 0° · max 2°/5°',
+      'roll 21° yaw 0° · max 3°/8°',
     );
   });
 
   it('shows how much of the frame the face fills', () => {
-    expect(detailOf(run(), 'face_size')).toBe('12% · min 5%');
+    expect(detailOf(run(), 'face_size')).toBe('12% · min 2%');
   });
 
   it('shows the brightness it measured', () => {

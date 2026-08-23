@@ -21,11 +21,16 @@ export type QualityLimits = {
   pose_pitch_max_deg: number;
   face_area_ratio_min: number;
   head_margin_ratio_min: number;
-  /** 0–255, the gate's own scale. */
+  /** 0–255, the gate's own scale. Advisory — see `advisory`. */
   exposure_median_min: number;
   exposure_median_max: number;
-  shadow_diff_max: number;
-  background_std_max: number;
+  /**
+   * The checks worth showing that must never gate the shutter, because the
+   * server only ever warns about them. Median brightness raises TOO_DARK or
+   * UNDEREXPOSED, both WARN_ONLY; what blocks is the share of pure black
+   * pixels, which a preview cannot measure.
+   */
+  advisory: string[];
 };
 
 /**
@@ -208,14 +213,16 @@ export function evaluateGate(
   }
 
   if (stats) {
-    const median = stats.luma * 255;
+    // Judged on the number that is shown. "80 · 80–180" beside a red tile is
+    // an argument with itself.
+    const median = Math.round(stats.luma * 255);
     checks.push(
       check(
         'exposure',
         verdict(
           median >= limits.exposure_median_min && median <= limits.exposure_median_max,
         ),
-        `${Math.round(median)} · ${Math.round(limits.exposure_median_min)}–` +
+        `${median} · ${Math.round(limits.exposure_median_min)}–` +
           `${Math.round(limits.exposure_median_max)}`,
       ),
     );
@@ -226,11 +233,14 @@ export function evaluateGate(
   }
 
   const ordered = LIVE_CHECK_KEYS.map((key) => checks.find((c) => c.key === key)!);
-  const failing = ordered.find((c) => c.status === 'fail');
+  // Only a check the server would actually refuse over holds the shutter.
+  const blocking = ordered.find(
+    (c) => c.status === 'fail' && !limits.advisory.includes(c.key),
+  );
 
   return {
     checks: ordered,
-    ready: !failing,
-    hint: failing ? HINTS[failing.key] : READY_HINT,
+    ready: !blocking,
+    hint: blocking ? HINTS[blocking.key] : READY_HINT,
   };
 }
