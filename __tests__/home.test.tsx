@@ -243,3 +243,30 @@ describe('home', () => {
     });
   });
 });
+
+describe('the continue card', () => {
+  it('shows the photo it is offering to continue with', () => {
+    // It carried an empty grey box: the thumbnail was never wired up, so the
+    // card offered to continue with a picture it would not show.
+    useDraftStore.setState({
+      countryCode: 'gb',
+      documentType: 'UK Passport 35x45 mm',
+      taskId: 'task-1',
+      taskStartedAt: Date.now(),
+    });
+
+    renderScreen(
+      <Photos />,
+      seeds([
+        [
+          ['photo-status', 'task-1'],
+          { task_id: 'task-1', state: 'SUCCESS', preview_url: '/previews/p.jpg' },
+        ],
+      ]),
+    );
+
+    expect(screen.getByLabelText('Your photo').props.source.uri).toBe(
+      'https://visapics.org/previews/p.jpg',
+    );
+  });
+});

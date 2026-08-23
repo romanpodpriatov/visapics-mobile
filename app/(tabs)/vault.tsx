@@ -91,7 +91,13 @@ export default function Vault() {
               accessibilityHint="Press and hold to delete"
               style={[styles.tile, deleting === photo.id && styles.tileBusy]}
             >
-              <Image source={thumbnailSource(photo)} style={styles.thumb} resizeMode="cover" />
+              <Image
+                source={thumbnailSource(photo)}
+                style={styles.thumb}
+                // A passport photo has a shape the document dictates. Cropping
+                // it to a square tile shows a picture that would be refused.
+                resizeMode="contain"
+              />
               <View style={styles.tileText}>
                 <View style={styles.tileTitleRow}>
                   <Text style={styles.tileFlag}>{flagEmoji(photo.country_code ?? '')}</Text>

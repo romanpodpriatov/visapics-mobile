@@ -8,10 +8,12 @@
  * counts that remain all come from /api/v1/config.
  */
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useConfig, useCredits, useSpecifications } from '../../src/api/hooks';
+import { SITE_BASE } from '../../src/api/client';
+import { completed, usePhotoStatus } from '../../src/photo/upload';
 import {
   Button,
   Card,
@@ -61,6 +63,13 @@ export default function Photos() {
   // same list the picker loads, and it holds every document whose name
   // contains a slash — which the per-document route cannot address.
   const { data: documents } = useSpecifications(countryCode ?? '');
+
+  // The card carried an empty grey box where the photo should be. The status
+  // for a finished task is already in the cache, and settles without polling.
+  const finished = completed(usePhotoStatus(taskId).data);
+  const draftPreview = finished?.preview_url
+    ? `${SITE_BASE}${finished.preview_url}`
+    : null;
   const spec = documents?.find((d) => d.document_type === documentType);
   const specLine = spec
     ? [formatDimensions(spec), spec.background_color?.replace(/_/g, ' ')].filter(Boolean).join(' · ')
@@ -188,7 +197,16 @@ export default function Photos() {
             accessibilityRole="button"
             style={styles.draftBody}
           >
-            <View style={styles.draftThumb} />
+            {draftPreview ? (
+              <Image
+                source={{ uri: draftPreview }}
+                style={styles.draftThumb}
+                resizeMode="contain"
+                accessibilityLabel="Your photo"
+              />
+            ) : (
+              <View style={styles.draftThumb} />
+            )}
             <View style={styles.documentText}>
               <Text style={styles.draftTitle}>{documentType}</Text>
               <Text style={styles.documentSpec}>{specLine}</Text>

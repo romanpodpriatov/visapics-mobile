@@ -56,7 +56,10 @@ export default function Processing() {
   // The stages the server has reported so far, in the order it reported them.
   const [stages, setStages] = useState<string[]>([]);
   useEffect(() => {
-    setStages((seen) => (seen[seen.length - 1] === stage ? seen : [...seen, stage]));
+    // Seen at all, not seen last: the pipeline reports a stage again after
+    // moving on and coming back, and comparing only with the previous entry
+    // listed "Detecting face" twice with "Uploading photo" in between.
+    setStages((seen) => (seen.includes(stage) ? seen : [...seen, stage]));
   }, [stage]);
 
   useEffect(() => {
@@ -84,7 +87,16 @@ export default function Processing() {
 
       {photo ? (
         <View style={styles.preview}>
-          <Image source={{ uri: photo }} style={styles.previewImage} resizeMode="cover" />
+          <Image
+            source={{ uri: photo }}
+            style={styles.previewImage}
+            // Whole, not cropped: "cover" filled the fixed height by cutting
+            // the top and bottom off a portrait photo, so the person watched a
+            // zoomed-in crop of their own head while the pipeline worked on
+            // the picture they actually took.
+            resizeMode="contain"
+            accessibilityLabel="Your photo"
+          />
           <View style={styles.previewTag}>
             <View style={styles.previewDot} />
             <Text style={styles.previewTagText}>Your photo</Text>
@@ -173,7 +185,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.card,
     marginBottom: 18,
   },
-  previewImage: { width: '100%', height: 236, opacity: 0.72 },
+  previewImage: { width: '100%', height: 236, opacity: 0.72, backgroundColor: theme.color.night },
   previewTag: {
     position: 'absolute',
     left: 12,

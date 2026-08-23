@@ -166,3 +166,45 @@ describe('a photo that is no longer there', () => {
     expect(sent).not.toHaveBeenCalled();
   });
 });
+
+describe('the photo being processed', () => {
+  beforeEach(() => {
+    mockFiles['file:///photo.jpg'] = { exists: true, size: 240_000 };
+    jest.spyOn(api, 'upload').mockResolvedValue({ task_id: 'task-1' } as never);
+    useDraftStore.setState({
+      countryCode: 'gb',
+      documentType: 'UK Passport offline 35x45 mm',
+      removeBackground: true,
+      enhance: true,
+      taskId: null,
+    });
+  });
+
+  it('is shown whole, not cropped to fit the card', () => {
+    // "cover" filled a fixed-height box by cutting the top and bottom off a
+    // portrait photo — so the person watched a zoomed-in crop of their own
+    // head while the pipeline worked on the whole thing.
+    renderScreen(<Processing />, seeds);
+
+    expect(screen.getByLabelText('Your photo').props.resizeMode).toBe('contain');
+  });
+
+  it('lists each stage once, in the order the server first reported it', async () => {
+    // The server repeats a stage name after moving on and coming back, and the
+    // list only skipped a repeat when it was the immediately previous one —
+    // so "Detecting face" appeared twice with "Uploading photo" between.
+    const reported = ['Detecting face', 'Uploading photo', 'Detecting face'];
+    let poll = 0;
+    jest.spyOn(api, 'get').mockImplementation(((path: string) => {
+      if (!path.startsWith('/photo/status')) return Promise.resolve({});
+      const status = reported[Math.min(poll, reported.length - 1)];
+      poll += 1;
+      return Promise.resolve({ ...running, status });
+    }) as never);
+    renderScreen(<Processing />, seeds);
+
+    await waitFor(() => expect(screen.getAllByText('Detecting face').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText('Uploading photo').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('Detecting face')).toHaveLength(1);
+  });
+});

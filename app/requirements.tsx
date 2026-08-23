@@ -60,7 +60,7 @@ export default function Requirements() {
           <Card flush style={styles.specCard}>
             <View style={styles.specBody}>
               <View style={styles.diagram}>
-                <Image source={compliant} style={styles.diagramImage} resizeMode="cover" />
+                <Image source={compliant} style={styles.diagramImage} resizeMode="contain" />
                 <View style={styles.headBar} />
                 <Text style={styles.headLabel}>HEAD</Text>
               </View>
@@ -100,11 +100,11 @@ export default function Requirements() {
           <Text style={[styles.eyebrow, styles.sectionLabel]}>Accepted vs rejected</Text>
           <View style={styles.examples}>
             <View style={[styles.example, styles.exampleOk]}>
-              <Image source={compliant} style={styles.exampleImage} resizeMode="cover" />
+              <Image source={compliant} style={styles.exampleImage} resizeMode="contain" />
               <Text style={[styles.exampleCaption, styles.captionOk]}>✓ Compliant example</Text>
             </View>
             <View style={[styles.example, styles.exampleBad]}>
-              <Image source={original} style={styles.exampleImage} resizeMode="cover" />
+              <Image source={original} style={styles.exampleImage} resizeMode="contain" />
               <Text style={[styles.exampleCaption, styles.captionBad]}>✕ Original snapshot</Text>
             </View>
           </View>
@@ -157,10 +157,14 @@ const styles = StyleSheet.create({
     height: '100%',
     borderWidth: 1,
     borderColor: theme.color.borderStrong,
+    backgroundColor: theme.color.card,
   },
+  // Inside the picture, not beside it. At left: -6 the bar and its label sat
+  // outside the diagram and were clipped by the card, which read as the
+  // measurement sliding off to the left.
   headBar: {
     position: 'absolute',
-    left: -6,
+    left: 7,
     top: '14%',
     bottom: '8%',
     width: 1,
@@ -168,12 +172,17 @@ const styles = StyleSheet.create({
   },
   headLabel: {
     position: 'absolute',
-    left: -4,
+    left: 11,
     top: '44%',
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(11,17,32,.66)',
     fontFamily: theme.type.mono,
     fontSize: 8,
-    color: theme.color.accent,
-    transform: [{ translateX: -14 }],
+    letterSpacing: 0.6,
+    color: '#FFFFFF',
   },
   rows: { flex: 1, gap: 9 },
   specRow: {
@@ -241,7 +250,7 @@ const styles = StyleSheet.create({
   example: { flex: 1, borderWidth: 1, borderRadius: theme.radius.md, overflow: 'hidden' },
   exampleOk: { borderColor: '#A7F3D0', backgroundColor: theme.color.card },
   exampleBad: { borderColor: theme.color.dangerBorder, backgroundColor: theme.color.card },
-  exampleImage: { width: '100%', height: 118 },
+  exampleImage: { width: '100%', height: 118, backgroundColor: theme.color.card },
   exampleCaption: {
     paddingHorizontal: 10,
     paddingVertical: theme.space.sm,
