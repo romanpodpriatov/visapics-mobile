@@ -189,11 +189,11 @@ export default function Photos() {
       {showDraft ? (
         <Card flush style={styles.draftCard}>
           <View style={styles.draftHead}>
-            <Text style={styles.draftEyebrow}>◆ Continue</Text>
+            <Text style={styles.draftEyebrow}>◆ {finished ? 'Continue' : 'Working'}</Text>
             <Text style={styles.draftExpiry}>Deletes in {deletionLabel(remaining)}</Text>
           </View>
           <Pressable
-            onPress={() => router.push('/result')}
+            onPress={() => router.push(finished ? '/result' : '/processing')}
             accessibilityRole="button"
             style={styles.draftBody}
           >
@@ -208,7 +208,9 @@ export default function Photos() {
               <View style={styles.draftThumb} />
             )}
             <View style={styles.documentText}>
-              <Text style={styles.draftTitle}>{documentType}</Text>
+              <Text style={styles.draftTitle}>
+                {finished ? documentType : 'Processing your photo'}
+              </Text>
               <Text style={styles.documentSpec}>{specLine}</Text>
             </View>
             <ChevronIcon />

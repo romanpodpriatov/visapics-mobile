@@ -78,6 +78,13 @@ export default function Result() {
       : '';
 
   const result = completed(status.data);
+  /**
+   * The task is still running. Reached by tapping "Continue" while the
+   * pipeline works — the card appears the moment a task exists — and the
+   * screen used to announce "Your photo is ready" over "Preparing your
+   * photo…" for the whole minute the work took.
+   */
+  const working = !result && !rejected && Boolean(taskId);
   const compliance = result?.compliance;
   const checks = (compliance?.checks ?? []).filter((c) => c.verdict !== 'not_applicable');
   const failing = checks.filter((c) => c.verdict === 'fail');
@@ -183,19 +190,40 @@ export default function Result() {
       </View>
 
       <Text style={styles.eyebrow}>
-        ◆ {rejected ? 'Not processed' : failed ? 'Not compliant yet' : 'Your result'}
+        ◆{' '}
+        {rejected
+          ? 'Not processed'
+          : working
+            ? 'Processing'
+            : failed
+              ? 'Not compliant yet'
+              : 'Your result'}
       </Text>
       <Text style={styles.headline}>
         {rejected
           ? 'This photo could not be processed.'
-          : failed
-            ? failing.length === 1
-              ? 'One rule needs fixing.'
-              : `${failing.length} rules need fixing.`
-            : compliance
-              ? `Passed all ${compliance.total} checks.`
-              : 'Your photo is ready.'}
+          : working
+            ? 'Still working on it.'
+            : failed
+              ? failing.length === 1
+                ? 'One rule needs fixing.'
+                : `${failing.length} rules need fixing.`
+              : compliance
+                ? `Passed all ${compliance.total} checks.`
+                : 'Your photo is ready.'}
       </Text>
+
+      {working ? (
+        <Card style={[styles.photoCard, shadow.subtle]}>
+          <Text style={styles.rejected}>
+            {status.data?.status ?? 'Uploading photo'} · {status.data?.progress ?? 0}%
+          </Text>
+          <Text style={styles.rejectedDetail}>
+            This usually takes about a minute. Keep the app open — the photo appears here when
+            it is done.
+          </Text>
+        </Card>
+      ) : null}
 
       {rejected ? (
         <Card style={[styles.photoCard, shadow.subtle]}>
@@ -234,7 +262,7 @@ export default function Result() {
         </Card>
       ) : null}
 
-      {rejected ? null : !failed && printImage ? (
+      {rejected || working ? null : !failed && printImage ? (
         <View style={styles.tabs}>
           <Pressable
             onPress={() => setTab('digital')}
@@ -257,7 +285,7 @@ export default function Result() {
         </View>
       ) : null}
 
-      {rejected ? null : (
+      {rejected || working ? null : (
       <Card style={[styles.photoCard, shadow.subtle]}>
         {tab === 'digital' || failed ? (
           digitalImage ? (

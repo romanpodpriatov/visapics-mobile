@@ -403,3 +403,32 @@ describe('the quality gate report', () => {
     expect(await screen.findByText('Your head is tilted. Straighten it.')).toBeTruthy();
   });
 });
+
+describe('a photo that is still being made', () => {
+  beforeEach(() => {
+    useDraftStore.setState({
+      countryCode: 'gb',
+      documentType: 'UK Passport offline 35x45 mm',
+      taskId: 'task-1',
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('says it is still working instead of announcing the photo is ready', async () => {
+    // Reached by tapping "Continue" while the pipeline was still running: the
+    // screen said "Your photo is ready." over "Preparing your photo…" for the
+    // fifty seconds the work actually took.
+    serve({ task_id: 'task-1', state: 'PROCESSING', progress: 40, status: 'Removing background' });
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText('Still working on it.')).toBeTruthy();
+    expect(screen.queryByText('Your photo is ready.')).toBeNull();
+  });
+
+  it('shows what the server says it is doing', async () => {
+    serve({ task_id: 'task-1', state: 'PROCESSING', progress: 40, status: 'Removing background' });
+    renderScreen(<Result />, seeds);
+
+    expect(await screen.findByText(/Removing background/)).toBeTruthy();
+  });
+});

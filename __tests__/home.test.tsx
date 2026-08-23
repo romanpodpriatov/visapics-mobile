@@ -270,3 +270,25 @@ describe('the continue card', () => {
     );
   });
 });
+
+describe('the continue card while the pipeline is still working', () => {
+  it('says it is processing and goes back to the progress, not to a result', () => {
+    // The card appears the moment a task exists, so tapping it during the
+    // minute the work takes landed on a result screen with no result.
+    useDraftStore.setState({
+      countryCode: 'gb',
+      documentType: 'UK Passport 35x45 mm',
+      taskId: 'task-1',
+      taskStartedAt: Date.now(),
+    });
+
+    renderScreen(
+      <Photos />,
+      seeds([[['photo-status', 'task-1'], { task_id: 'task-1', state: 'PROCESSING' }]]),
+    );
+
+    fireEvent.press(screen.getByText('Processing your photo'));
+
+    expect(mockPush).toHaveBeenCalledWith('/processing');
+  });
+});
