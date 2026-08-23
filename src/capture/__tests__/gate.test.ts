@@ -47,7 +47,6 @@ describe('the live gate', () => {
       'face_size',
       'pose',
       'exposure',
-      'shadows',
     ]);
   });
 
@@ -98,13 +97,6 @@ describe('the live gate', () => {
     expect(statusOf(run(GOOD_FACE, dark), 'exposure')).toBe('fail');
   });
 
-  it('refuses uneven light, which is the other half of what refused the real photo', () => {
-    const shadowed = { ...GOOD_STATS, lumaSpread: 55 / 255 };
-
-    expect(statusOf(run(GOOD_FACE, shadowed), 'shadows')).toBe('fail');
-    expect(run(GOOD_FACE, shadowed).hint).toMatch(/light|shadow/i);
-  });
-
   it('does not judge the background at all, because the pipeline replaces it', () => {
     // Every photo is processed with remove_background, so a live verdict on
     // the wall behind someone would refuse a shot the server was going to fix
@@ -112,16 +104,12 @@ describe('the live gate', () => {
     expect(run().checks.map((c) => String(c.key))).not.toContain('background');
   });
 
-  it('will not call darkness even lighting', () => {
-    // In the dark every part of the frame is equally dark, so the spread is
-    // zero and evenness "passes" — which is how a pitch-black preview showed a
-    // green tick. Evenness of nothing is not a measurement.
-    const dark = { luma: 5 / 255, lumaSpread: 0 };
-    const result = run(GOOD_FACE, dark);
-
-    expect(statusOf(result, 'exposure')).toBe('fail');
-    expect(statusOf(result, 'shadows')).toBe('unmeasured');
-    expect(result.ready).toBe(false);
+  it('does not judge the shadow on a face it cannot locate in the pixels', () => {
+    // Shadow is measured across the face. The face's position is known in
+    // JavaScript; the pixels exist only in the frame worklet. A fixed band of
+    // the frame stood in for the face and failed evenly lit rooms, so the
+    // claim is not made at all — the server makes it on the full photo.
+    expect(run().checks.map((c) => String(c.key))).not.toContain('shadows');
   });
 
   it('does not block the shutter on light it could not measure', () => {
@@ -165,5 +153,35 @@ describe('headRoll', () => {
 
     expect(statusOf(run(level), 'pose')).toBe('pass');
     expect(statusOf(run(tilted), 'pose')).toBe('fail');
+  });
+});
+
+
+describe('what each check measured', () => {
+  // A tile that only says "fix this" leaves the person guessing which way to
+  // move, and left me guessing which number was wrong for three rounds.
+  const detailOf = (result: ReturnType<typeof evaluateGate>, key: string) =>
+    result.checks.find((c) => c.key === key)?.detail;
+
+  it('shows the tilt it read, and the limit it read it against', () => {
+    expect(detailOf(run({ ...GOOD_FACE, rollAngle: -69.14 }), 'pose')).toBe(
+      'roll 21° yaw 0° · max 2°/5°',
+    );
+  });
+
+  it('shows how much of the frame the face fills', () => {
+    expect(detailOf(run(), 'face_size')).toBe('12% · min 5%');
+  });
+
+  it('shows the brightness it measured', () => {
+    expect(detailOf(run(), 'exposure')).toBe('130 · 80–180');
+  });
+
+  it('shows the tightest margin around the head', () => {
+    expect(detailOf(run(), 'head_in_frame')).toBe('margin 30% · min 3%');
+  });
+
+  it('says nothing it did not measure', () => {
+    expect(detailOf(evaluateGate(null, FRAME, GOOD_STATS, LIMITS), 'pose')).toBeUndefined();
   });
 });

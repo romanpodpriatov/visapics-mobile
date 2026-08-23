@@ -29,10 +29,17 @@ export type QualityLimits = {
 };
 
 /**
- * Six, not the server's thirteen, and deliberately without `background`: every
- * photo is processed with remove_background, so refusing a shot over the wall
- * behind someone would block a picture the pipeline was about to fix. The
- * server still warns about the background of the original.
+ * Five, not the server's thirteen, and deliberately without `background` or
+ * `shadows`.
+ *
+ * The background is replaced by the pipeline, so refusing a shot over the wall
+ * behind someone would block a picture that was about to be fixed. Shadow is a
+ * measurement across the *face*, and the face's position is known in
+ * JavaScript while the pixels exist only inside the frame worklet — the bridge
+ * between them was the shared value that stopped the worklet running at all.
+ * A fixed band of the frame stood in for the face and failed evenly lit rooms,
+ * so it is better not to claim the measurement: the server makes it properly
+ * on the full photo and now says, in words, what is wrong.
  */
 export const LIVE_CHECK_KEYS = [
   'face_detection',
@@ -40,7 +47,6 @@ export const LIVE_CHECK_KEYS = [
   'face_size',
   'pose',
   'exposure',
-  'shadows',
 ] as const;
 
 export type LiveCheckKey = (typeof LIVE_CHECK_KEYS)[number];
@@ -52,7 +58,6 @@ export const LIVE_CHECK_LABELS: Record<LiveCheckKey, string> = {
   face_size: 'Face size',
   pose: 'Head straight',
   exposure: 'Exposure',
-  shadows: 'Even lighting',
 };
 
 /** What to say about the first thing standing in the way. */
@@ -62,7 +67,6 @@ const HINTS: Record<LiveCheckKey, string> = {
   face_size: 'Move closer to the camera',
   pose: 'Hold your head straight',
   exposure: 'Find brighter, even light',
-  shadows: 'Even out the light on your face',
 };
 
 /**
@@ -73,7 +77,17 @@ const HINTS: Record<LiveCheckKey, string> = {
 export const GUIDE_WIDTH_SHARE = 0.7;
 
 export type CheckStatus = 'pass' | 'fail' | 'unmeasured';
-export type LiveCheck = { key: LiveCheckKey; label: string; status: CheckStatus };
+export type LiveCheck = {
+  key: LiveCheckKey;
+  label: string;
+  status: CheckStatus;
+  /**
+   * What was measured, against what. A tile that only says "fix this" leaves
+   * the person guessing which way to move — and left three rounds of debugging
+   * guessing which number was wrong.
+   */
+  detail?: string;
+};
 export type GateState = { checks: LiveCheck[]; ready: boolean; hint: string };
 
 export type FaceSample = {
@@ -113,22 +127,15 @@ export function headRoll(reportedDegrees: number): number {
   return reportedDegrees - 90 * Math.round(reportedDegrees / 90);
 }
 
-function poseWithin(face: FaceSample, limits: QualityLimits): boolean {
-  return (
-    Math.abs(headRoll(face.rollAngle)) <= limits.pose_roll_max_deg &&
-    Math.abs(face.yawAngle) <= limits.pose_yaw_max_deg
-  );
-}
-
-function headInFrame(face: FaceSample, frame: FrameSize, limits: QualityLimits): boolean {
+/** The tightest of the four gaps between the head and the edge of the frame. */
+function smallestMargin(face: FaceSample, frame: FrameSize): number {
   const { x, y, width, height } = face.bounds;
-  const margins = [
+  return Math.min(
     x / frame.width,
     y / frame.height,
     (frame.width - (x + width)) / frame.width,
     (frame.height - (y + height)) / frame.height,
-  ];
-  return margins.every((margin) => margin >= limits.head_margin_ratio_min);
+  );
 }
 
 function faceShare(face: FaceSample, frame: FrameSize): number {
@@ -154,45 +161,68 @@ export function evaluateGate(
     return { checks: LIVE_CHECK_KEYS.map(unmeasured), ready: false, hint: WAITING_HINT };
   }
 
-  const check = (key: LiveCheckKey, status: CheckStatus): LiveCheck => ({
+  const check = (key: LiveCheckKey, status: CheckStatus, detail?: string): LiveCheck => ({
     key,
     label: LIVE_CHECK_LABELS[key],
     status,
+    ...(detail === undefined ? {} : { detail }),
   });
 
-  const checks: LiveCheck[] = face
-    ? [
-        check('face_detection', 'pass'),
-        check('head_in_frame', verdict(headInFrame(face, frame, limits))),
-        check('face_size', verdict(faceShare(face, frame) >= limits.face_area_ratio_min)),
-        check('pose', verdict(poseWithin(face, limits))),
-      ]
-    : [
-        check('face_detection', 'fail'),
-        unmeasured('head_in_frame'),
-        unmeasured('face_size'),
-        unmeasured('pose'),
-      ];
+  const percent = (share: number) => `${Math.round(share * 100)}%`;
+  const degrees = (value: number) => `${Math.round(value)}°`;
+
+  const checks: LiveCheck[] = [];
+
+  if (face) {
+    const margin = smallestMargin(face, frame);
+    const share = faceShare(face, frame);
+    const roll = Math.abs(headRoll(face.rollAngle));
+    const yaw = Math.abs(face.yawAngle);
+
+    checks.push(
+      check('face_detection', 'pass'),
+      check(
+        'head_in_frame',
+        verdict(margin >= limits.head_margin_ratio_min),
+        `margin ${percent(margin)} · min ${percent(limits.head_margin_ratio_min)}`,
+      ),
+      check(
+        'face_size',
+        verdict(share >= limits.face_area_ratio_min),
+        `${percent(share)} · min ${percent(limits.face_area_ratio_min)}`,
+      ),
+      check(
+        'pose',
+        verdict(roll <= limits.pose_roll_max_deg && yaw <= limits.pose_yaw_max_deg),
+        `roll ${degrees(roll)} yaw ${degrees(yaw)} · max ` +
+          `${degrees(limits.pose_roll_max_deg)}/${degrees(limits.pose_yaw_max_deg)}`,
+      ),
+    );
+  } else {
+    checks.push(
+      check('face_detection', 'fail'),
+      unmeasured('head_in_frame'),
+      unmeasured('face_size'),
+      unmeasured('pose'),
+    );
+  }
 
   if (stats) {
     const median = stats.luma * 255;
-    const exposed =
-      median >= limits.exposure_median_min && median <= limits.exposure_median_max;
     checks.push(
-      check('exposure', verdict(exposed)),
-      // Evenness of nothing is not a measurement. In the dark every part of
-      // the frame is equally dark, the spread is zero, and a pitch-black
-      // preview showed a green tick for even lighting.
       check(
-        'shadows',
-        exposed ? verdict(stats.lumaSpread * 255 <= limits.shadow_diff_max) : 'unmeasured',
+        'exposure',
+        verdict(
+          median >= limits.exposure_median_min && median <= limits.exposure_median_max,
+        ),
+        `${Math.round(median)} · ${Math.round(limits.exposure_median_min)}–` +
+          `${Math.round(limits.exposure_median_max)}`,
       ),
     );
   } else {
     // A phone whose frame worklet does not run must still be able to take a
-    // photo. Saying "not measured" is honest; refusing for ever is not, and
-    // the server checks all three again anyway.
-    checks.push(unmeasured('exposure'), unmeasured('shadows'));
+    // photo, and the server checks the light again regardless.
+    checks.push(unmeasured('exposure'));
   }
 
   const ordered = LIVE_CHECK_KEYS.map((key) => checks.find((c) => c.key === key)!);

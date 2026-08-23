@@ -196,13 +196,22 @@ describe('capture', () => {
   });
 
   it('does not claim the light was checked before a frame was read', () => {
-    // Exposure, shadows and background all need pixels. Saying "not measured"
-    // is honest; showing them as passed would be a claim about a government
-    // document that nothing had verified.
+    // Exposure needs pixels. Saying "not measured" is honest; showing it as
+    // passed would be a claim about a government document that nothing had
+    // verified.
     renderScreen(<Capture />, seeds);
     see([goodFace]);
 
-    expect(screen.getAllByText('Not measured')).toHaveLength(2);
+    expect(screen.getAllByText('Not measured')).toHaveLength(1);
+  });
+
+  it('shows what each check measured, not just that it failed', () => {
+    // "Fix this" leaves the person guessing which way to move — and left three
+    // rounds of debugging guessing which number was wrong.
+    renderScreen(<Capture />, seeds);
+    see([{ ...goodFace, rollAngle: 30 }]);
+
+    expect(screen.getByText(/roll 30° yaw 0° · max 2°\/5°/)).toBeTruthy();
   });
 
   it('judges the face by the server\u2019s own limits, under the server\u2019s names', () => {

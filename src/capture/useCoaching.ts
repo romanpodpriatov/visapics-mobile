@@ -36,13 +36,6 @@ export function useCoaching(limits: QualityLimits | null) {
   const frameRef = useRef<FrameSize | null>(null);
   const statsRef = useRef<FrameStats | null>(null);
   const [state, setState] = useState<GateState>(WAITING);
-  /**
-   * The last face the gate judged, kept so the screen can show what the
-   * detector actually said. Temporary, while the capture stack is being
-   * proven on hardware.
-   */
-  const [sample, setSample] = useState<{ face: FaceSample | null; frame: FrameSize } | null>(null);
-
   const onFaces = useCallback((faces: FaceSample[], frame: FrameSize | null) => {
     // The largest face is the one holding the phone. A bystander behind them
     // is smaller, and is the server's problem rather than the gate's.
@@ -63,11 +56,10 @@ export function useCoaching(limits: QualityLimits | null) {
       const frame = frameRef.current;
       if (!frame) return;
       setState(evaluateGate(faceRef.current, frame, statsRef.current, limits));
-      setSample({ face: faceRef.current, frame });
     }, SAMPLE_INTERVAL_MS);
 
     return () => clearInterval(id);
   }, [limits]);
 
-  return { state, sample, onFaces, onStats };
+  return { state, onFaces, onStats };
 }
